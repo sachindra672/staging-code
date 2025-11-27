@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "endUsers" ALTER COLUMN "phone" SET DATA TYPE VARCHAR(64);

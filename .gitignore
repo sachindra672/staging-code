@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.env*
+nohup.out
+doubts/*
+thumbs
+mg_mat/
+
+output/
+uploads/
+submissions/
+submissions/
+assignments/
+doubts/
+Release/
+assignments/
+core

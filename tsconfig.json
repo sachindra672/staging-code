@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": false, //make it true
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false, //make it true
+    "removeComments": true,
+    "sourceMap": false,
+    "downlevelIteration": false,
+    "noEmitHelpers": true,
+    "importHelpers": true,
+    "inlineSourceMap": false,
+    "inlineSources": false,
+    "resolveJsonModule": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": false, //make it true
+    "strictPropertyInitialization": false, //make it true
+    "noUnusedParameters": true
+  },
+  "include": [
+    "src",
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "coverage"
+  ]
+}

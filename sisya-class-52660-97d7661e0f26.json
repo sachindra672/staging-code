@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "sisya-class-52660",
+  "private_key_id": "97d7661e0f26dfe59ad798c8af5c726dc9db1234",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCryZI7LZzefXAc\nLsQ1yiLSLkrxug5z4t0MtBKTMW1lQb7TOVqfaEEu7fbFZhQz703ai3bt3GQyeFwu\nThSslpMy9r4BZ4l+DSRMrlcC+Fc+DT+UARrQnMNIzuN/nPAwVQoF2aKaVSztGNwy\nLclsECl5OMsOewv4gQF98vpZuo9oZiyth5rK3aM+gjLJBTPZG5yn4rZkFswdXHoH\n+M9qz1QE2W6KO6la5wY77zUXvOTyiLxMC2s86/rJ4f7DVsjwS1JGcneTXb87P4Jg\nrLf3BwM/QCugo8I/Hk0FiTMjv3BHzm3MZoRb8JZCgQH8hlN73JWdoA2aZL2Zx2v9\n1rJW+ZX/AgMBAAECggEABiI4WmySgU8xRZBV6SXCgIaunlrqUTD0e5OiZicJpOfo\nDFqr5a0vRqGwgfPXHNOakAcSxANugG7Tu8OF8XOe5d7xgdNUkW+esC45ZR3A37JR\nZtNzRaeTQXJBpTjRSqh+px7SM3h/FighFJmV64nYMT/Z4DZ8gu74Qqr+TV3f6PZN\n5v3aJ8/V4+0HS5VhvJULfOL/tb1B1m33QgLu0G+TUR+afmofiaubwupU7CDA1J9n\n+DsBhDQ2s4HqimqqRcczesZPYeuVA+PsmsrqSi8VdxMM0RLD78mLNneJkJLf1TuI\nCs7onQHDm7Ho4h2IFikEb4W9z8+67GembnH8IHu0oQKBgQDrQU4ZAYSwlzqb5OiH\nPm8P0i+rj3SeylIoui2TnFuzHTZ9KijlUZbNvO6WBdtN05oiQQG5F/WSd2p0+vTV\nw7t19v91nCXp/vpYK0efBmHatUiHfoyqrgb4COZXDVsyyEh5AG3XJ/3B7v2t5XuS\n35seatwDHLw4TM+zH1cDu2464wKBgQC674iWnA5eVLCzRL/B1QJQO9PMLAyP0ffA\n5Wdeckr1SVdHXPFLR4wEJRBkmVsj4TQdzXKHyHAulqqDnq2Umj1z8ZsIESZx9NZl\nbQYEsJqxthv5c/fpVro7Kri8kU+g0rz0inH0+sywuG8ioz/mRz0+QBfqYCuA6Olo\njs8LjD8XNQKBgQCUOVVHlBlSWjZnOtb3P3MieL/oTD6iPb9+Qa+trXppZCKMwh96\nPOnTPxLkG1SNuKEIrAS15k6nte2xPt08QlK+hJ14MKYCxNBe9QXvQEovTsEf/bAL\nahKh/JmEh7nKST7AXnDWey/7HOVgx5IQfCp0A8gTfetpXZwPs9NTWqidGQKBgQCm\n46SwuUAGrVtXoKAFn3LCSLdMx2Krn4utteC0LBuJouF9v5dYWtbA+IoLFfKNNMg/\ndySx3ptwrGgsu6RCT/VfJqr+57jH8graYBwIYdapo2iUKxmAQ0JeAkUNbDmH3bx+\nIX+dc678cpwdc1tf7efaRIRVZWhRXR7Mjvp/V8UXpQKBgDW5/LszZk+Qwa78C+px\nS1p100P52vmUfbSKkqJbSty8Gr3ZZlRX7ALUeMlwRZWmqE2JZ00VasO4Dkeniquh\nQVlZlIFnhZZoyKIcBH4McvqmtjdRaTBZEx82kqujF9lImGWZtc05rGFvSnS1Y/ai\nc8OUaMIXkhL2zso0BIzPYhLV\n-----END PRIVATE KEY-----\n",
+  "client_email": "sisya-bucket@sisya-class-52660.iam.gserviceaccount.com",
+  "client_id": "114849352221626398461",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/sisya-bucket%40sisya-class-52660.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

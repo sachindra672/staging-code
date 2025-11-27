@@ -1,0 +1,1867 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model endUsers {
+  id                        Int                         @id @default(autoincrement())
+  uuid                      String                      @default(uuid())
+  type                      String
+  name                      String?                     @db.VarChar(255)
+  email                     String?                     @db.VarChar(255)
+  address                   String?                     @db.VarChar(255)
+  phone                     String?                     @unique @db.VarChar(64)
+  grade                     String?
+  password                  String?                     @db.VarChar(255)
+  isVerified                Boolean?                    @default(false)
+  createdOn                 DateTime?                   @default(now())
+  modefiedOn                DateTime?                   @default(now())
+  image                     String?
+  board                     String                      @default("cbse")
+  deviceId                  String                      @default("")
+  educationBoardId          Int?                        @default(1)
+  parentId                  Int?
+  parentName                String?
+  parentDeviceIds           String?
+  isActive                  Boolean                     @default(true)
+  groupChatInfoId           Int?
+  apnToken                  String?
+  deviceType                DeviceType?                 @default(ANDROID)
+  aiRatings                 AIRating[]
+  Bgreview                  Bgreview[]
+  GroupMember               GroupMember[]
+  OpenSessionAttendance     OpenSessionAttendance[]
+  OpenSessionBooking        OpenSessionBooking[]
+  OpenSessionFeedback       OpenSessionFeedback[]
+  OpenSessionQuizResponse   OpenSessionQuizResponse[]
+  preSessionReminders       PreSessionReminder[]
+  responses                 Response[]
+  sessionFeedbacks          SessionFeedback[]
+  StudentAttendanceInterval StudentAttendanceInterval[]
+  attendanceRecord          attendanceRecord[]
+  cTestResponse             cTestResponse[]
+  courseRating              courseRatings[]
+  courses                   courses[]
+  ctestSubmission           ctestSubmission[]
+  doubt                     doubt[]
+  doubtPackagePurchases     doubtPackagePurchases[]
+  doubtRecord               doubtRecord[]
+  nboard                    EducationBoard?             @relation(fields: [educationBoardId], references: [id])
+  parent                    parent?                     @relation(fields: [parentId], references: [id])
+  mcqResponses              mcqResponses[]
+  mentorRatings             mentorRatings[]
+  mgSubsciption             mgSubsciption[]
+  purchases                 purchases[]
+  qTestResponse             qTestResponse[]
+  qtestSubmission           qtestSubmission[]
+  sessionTestResponse       sessionTestResponse[]
+  sessionTestSubmission     sessionTestSubmission[]
+  submission                submission[]
+  subscription              subscription[]
+  Comment                   Comment[]
+  BlogLike                  BlogLike[]
+}
+
+model mentor {
+  id                      Int                       @id @default(autoincrement())
+  uuid                    String                    @default(uuid())
+  name                    String                    @db.VarChar(255)
+  email                   String                    @db.VarChar(255)
+  address                 String                    @db.VarChar(255)
+  searchTags              String                    @db.VarChar(255)
+  languages               String                    @db.VarChar(255)
+  passHash                String                    @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  about                   String                    @default("this is some random about value to prevent null error ")
+  Grades                  String[]                  @default(["1", "2", "3", "4", "5", "6"])
+  studentCount            BigInt
+  doubtsSolved            BigInt
+  averageRating           Float
+  dateOfBirth             DateTime
+  isActive                Boolean                   @default(true)
+  createdOn               DateTime                  @default(now())
+  modefiedOn              DateTime                  @default(now())
+  phone                   String                    @db.VarChar(13)
+  subjectId               Int?
+  deviceId                String                    @default("")
+  ApproverAssignment      ApproverAssignment[]
+  AuditLog                AuditLog[]
+  approvedContents        Content[]                 @relation("ContentApprover")
+  uploadedContents        Content[]                 @relation("UploadedByMentor")
+  contentAccess           ContentAccess[]           @relation("ContentAccessMentor")
+  ReviewedAccessRequests  ContentAccessRequest[]    @relation("MentorReviewer")
+  ContentAccessRequest    ContentAccessRequest[]    @relation("AccessRequester")
+  GroupMember             GroupMember[]
+  OpenSession             OpenSession[]
+  SessionTest             SessionTest[]
+  TeachIntro              TeachIntro[]
+  TeacherSessionAnalytics TeacherSessionAnalytics[]
+  assignments             assignments[]
+  courseRating            courseRatings[]
+  courses                 courses[]
+  ctest                   ctest[]
+  doubt                   doubt[]
+  doubtResponse           doubtResponse[]
+  leaves                  leaves[]
+  ltCourses               ltCourses[]
+  mcqTest                 mcqTest[]
+  Subject                 Subject?                  @relation(fields: [subjectId], references: [id])
+  mentorRatings           mentorRatings[]
+  qtest                   qtest[]
+  qualifications          qualifications[]
+  session                 session[]
+  subjectRecord           subjectRecord[]
+  teacherAttendanceRecord teacherAttendanceRecord[]
+}
+
+model testmodelNewMigration {
+  id     Int     @id @default(autoincrement())
+  sfield String?
+}
+
+model testmode2NewMigration {
+  id     Int     @id @default(autoincrement())
+  sfield String?
+}
+
+model qualifications {
+  id          Int      @id @default(autoincrement())
+  name        String
+  level       String
+  institution String
+  year        DateTime
+  mentorId    Int
+  for         mentor   @relation(fields: [mentorId], references: [id])
+}
+
+model mentorRatings {
+  id         Int      @id @default(autoincrement())
+  rating     Float
+  comment    String
+  createdOn  DateTime @default(now())
+  modefiedOn DateTime @default(now())
+  userId     Int
+  mentorId   Int
+  mentor     mentor   @relation(fields: [mentorId], references: [id])
+  user       endUsers @relation(fields: [userId], references: [id])
+}
+
+model courses {
+  id            Int             @id @default(autoincrement())
+  rating        Float
+  comment       String
+  name          String
+  price         Float
+  currentPrice  Float
+  Subject       String          @default("English")
+  searchTags    String[]
+  createdOn     DateTime        @default(now())
+  modefiedOn    DateTime        @default(now())
+  grade         String          @default("1")
+  mentorId      Int
+  isActive      Boolean         @default(true)
+  userId        Int?
+  assignments   assignments[]
+  courseRatings courseRatings[]
+  mentor        mentor          @relation(fields: [mentorId], references: [id])
+  user          endUsers?       @relation(fields: [userId], references: [id])
+  leads         leads[]
+  lessons       lessons[]
+  mcqTest       mcqTest[]
+  purchases     purchases[]
+  submission    submission[]
+}
+
+model ltCourses {
+  id               Int            @id @default(autoincrement())
+  name             String
+  description      String
+  searchTags       String[]
+  price            Float
+  currentPrice     Float
+  averageRating    Float
+  duration         Float
+  createdOn        DateTime       @default(now())
+  modifiedOn       DateTime       @default(now())
+  grade            String         @default("1")
+  mentorId         Int
+  category         String
+  level            String
+  subjects         Int[]
+  enrolledStudents Int            @default(0)
+  thumbnailUrl     String
+  isActive         Boolean        @default(true)
+  language         String
+  prerequisites    String[]
+  updatedOn        DateTime       @updatedAt
+  syllabus         String[]
+  subjectId        Int
+  subjectBundleId  Int?
+  mentor           mentor         @relation(fields: [mentorId], references: [id])
+  subjectBundle    subjectBundle? @relation(fields: [subjectBundleId], references: [id])
+  subject          Subject        @relation(fields: [subjectId], references: [id])
+  reviews          review[]
+  schedules        schedule[]
+  subscription     subscription[]
+}
+
+model subjectBundle {
+  id        Int         @id @default(autoincrement())
+  subjects  Subject[]
+  ltCourses ltCourses[]
+}
+
+model schedule {
+  id         Int       @id @default(autoincrement())
+  courseId   Int
+  dayOfWeek  String
+  startTime  DateTime
+  endTime    DateTime
+  createdOn  DateTime  @default(now())
+  modifiedOn DateTime  @default(now())
+  course     ltCourses @relation(fields: [courseId], references: [id])
+}
+
+model review {
+  id        Int       @id @default(autoincrement())
+  courseId  Int
+  rating    Float
+  comment   String
+  createdOn DateTime  @default(now())
+  course    ltCourses @relation(fields: [courseId], references: [id])
+}
+
+model courseRatings {
+  id            Int       @id @default(autoincrement())
+  title         String    @db.VarChar(255)
+  subject       String    @db.VarChar(100)
+  averageRating Float
+  userId        Int?
+  mentorId      Int?
+  coursesId     Int
+  course        courses   @relation(fields: [coursesId], references: [id])
+  mentor        mentor?   @relation(fields: [mentorId], references: [id])
+  user          endUsers? @relation(fields: [userId], references: [id])
+}
+
+model assignments {
+  id           Int          @id @default(autoincrement())
+  subject      String       @db.VarChar(128)
+  name         String
+  createdOn    DateTime     @default(now())
+  modefiedOn   DateTime     @default(now())
+  deadLine     DateTime?
+  mentorId     Int
+  coursesId    Int
+  parentCourse courses      @relation(fields: [coursesId], references: [id])
+  createdBy    mentor       @relation(fields: [mentorId], references: [id])
+  submission   submission[]
+}
+
+model submission {
+  id            Int         @id @default(autoincrement())
+  coursesId     Int
+  createdOn     DateTime    @default(now())
+  modifiedOn    DateTime    @default(now())
+  endUsersId    Int
+  assignmentsId Int
+  assignment    assignments @relation(fields: [assignmentsId], references: [id])
+  parentCourse  courses     @relation(fields: [coursesId], references: [id])
+  by            endUsers    @relation(fields: [endUsersId], references: [id])
+
+  @@unique([assignmentsId, endUsersId])
+}
+
+model doubt {
+  id            Int             @id @default(autoincrement())
+  createdOn     DateTime        @default(now())
+  modifiedOn    DateTime        @default(now())
+  description   String
+  subject       String          @db.VarChar(255)
+  topic         String          @db.VarChar(255)
+  status        Int
+  userId        Int
+  mentorId      Int?
+  assignee      mentor?         @relation(fields: [mentorId], references: [id])
+  asker         endUsers        @relation(fields: [userId], references: [id])
+  doubtResponse doubtResponse[]
+  subjectRecord subjectRecord[]
+}
+
+model doubtResponse {
+  id         Int      @id @default(autoincrement())
+  response   String
+  createdOn  DateTime @default(now())
+  modifiedOn DateTime @default(now())
+  doubtId    Int
+  mentorId   Int
+  to         doubt    @relation(fields: [doubtId], references: [id])
+  by         mentor   @relation(fields: [mentorId], references: [id])
+}
+
+model log {
+  id          Int      @id @default(autoincrement())
+  createdOn   DateTime @default(now())
+  info        String   @db.VarChar(255)
+  fullTrace   String
+  initiatorID Int
+}
+
+model lessons {
+  id          Int      @id @default(autoincrement())
+  section     String
+  title       String
+  description String
+  resourceURL String
+  createdOn   DateTime @default(now())
+  modifiedOn  DateTime @default(now())
+  playTime    Int
+  coursesId   Int
+  course      courses  @relation(fields: [coursesId], references: [id])
+}
+
+model admin {
+  id                   Int                    @id @default(autoincrement())
+  name                 String                 @db.VarChar(255)
+  isActive             Boolean                @default(true)
+  createdOn            DateTime               @default(now())
+  modifiedOn           DateTime               @default(now())
+  password             String                 @db.VarChar(64)
+  email                String                 @db.VarChar(255)
+  deviceId             String                 @default("")
+  AuditLog             AuditLog[]
+  ContentAccessRequest ContentAccessRequest[]
+  GroupMember          GroupMember[]
+}
+
+model offer {
+  id               Int      @id @default(autoincrement())
+  details          String
+  terms            String
+  start            DateTime
+  end              DateTime
+  createdOn        DateTime @default(now())
+  modifiedOn       DateTime @default(now())
+  offerCode        String
+  isActive         Boolean  @default(true)
+  targetCourse     Int      @default(0)
+  isPercentage     Boolean  @default(false)
+  discountQuantity Float    @default(0)
+  maxSaving        Float    @default(0)
+  banner           banner[]
+}
+
+model banner {
+  id             Int      @id @default(autoincrement())
+  createdOn      DateTime @default(now())
+  modifiedOn     DateTime @default(now())
+  isActive       Boolean  @default(true)
+  offerId        Int
+  connectedOffer offer    @relation(fields: [offerId], references: [id])
+}
+
+model mcqTest {
+  id           Int            @id @default(autoincrement())
+  startTime    DateTime
+  endTime      DateTime
+  duration     Int            @default(30)
+  modifiedOn   DateTime       @default(now())
+  createdOn    DateTime       @default(now())
+  mentorId     Int
+  coursesId    Int
+  mcq          mcq[]
+  mcqResponses mcqResponses[]
+  createdFor   courses        @relation(fields: [coursesId], references: [id])
+  createdBy    mentor         @relation(fields: [mentorId], references: [id])
+}
+
+model mcq {
+  id           Int            @id @default(autoincrement())
+  option1      String
+  option2      String
+  option3      String
+  option4      String
+  answer       Int
+  mcqTestId    Int
+  for          mcqTest        @relation(fields: [mcqTestId], references: [id])
+  mcqResponses mcqResponses[]
+}
+
+model mcqResponses {
+  id          Int      @id @default(autoincrement())
+  createdOn   DateTime @default(now())
+  response    Int
+  mcqId       Int
+  mcqTestId   Int
+  endUsersId  Int
+  createdBy   endUsers @relation(fields: [endUsersId], references: [id])
+  forQuestion mcq      @relation(fields: [mcqId], references: [id])
+  forTest     mcqTest  @relation(fields: [mcqTestId], references: [id])
+
+  @@unique([mcqTestId, mcqId, endUsersId])
+}
+
+model notifications {
+  id         BigInt   @id @default(autoincrement())
+  content    String
+  userType   Int
+  targetId   String
+  modifiedOn DateTime @default(now())
+  createdOn  DateTime @default(now())
+  catogery   String?
+}
+
+model scheduledNotification {
+  id               BigInt   @id @default(autoincrement())
+  content          String
+  userType         Int
+  targetId         String
+  sendAt           DateTime
+  status           String   @default("pending")
+  createdOn        DateTime @default(now())
+  recipientDetails Json     @default("{}")
+  recipientType    String   @default("all")
+  title            String   @default("Untitled")
+  tokens           Json     @default("[]")
+}
+
+model salesman {
+  id                       BigInt                     @id @default(autoincrement())
+  name                     String
+  email                    String                     @unique
+  classes                  Int[]
+  passwordHash             String
+  createOn                 DateTime                   @default(now())
+  updatedOn                DateTime                   @default(now())
+  isActive                 Boolean                    @default(true)
+  Salesleaves              Salesleaves[]
+  leads                    leads[]
+  leads2                   leads2[]
+  salesManAttendanceRecord salesManAttendanceRecord[]
+}
+
+model leads {
+  id          BigInt   @id @default(autoincrement())
+  leadInfo    String
+  targetPhone String
+  coursesId   Int
+  modifiedOn  DateTime @default(now())
+  createdOn   DateTime @default(now())
+  salesmanId  BigInt
+  status      String   @default("pending")
+  courses     courses  @relation(fields: [coursesId], references: [id])
+  salesman    salesman @relation(fields: [salesmanId], references: [id])
+}
+
+model purchases {
+  id         BigInt   @id @default(autoincrement())
+  modifiedOn DateTime @default(now())
+  createdOn  DateTime @default(now())
+  endUsersId Int
+  coursesId  Int
+  orderId    String?
+  status     Boolean?
+  course     courses  @relation(fields: [coursesId], references: [id])
+  user       endUsers @relation(fields: [endUsersId], references: [id])
+}
+
+model Messages {
+  id        BigInt   @id @default(autoincrement())
+  to        Int?
+  from      Int?
+  toUUID    String   @default("")
+  fromUUID  String   @default("")
+  type      String
+  content   String
+  isRead    Boolean
+  createdOn DateTime @default(now())
+}
+
+model subscription {
+  id                    BigInt               @id @default(autoincrement())
+  modifiedOn            DateTime             @default(now())
+  createdOn             DateTime             @default(now())
+  status                Boolean
+  endDate               DateTime
+  ltCoursesId           Int
+  endUsersId            Int
+  serbscriptionBundleId Int?
+  user                  endUsers             @relation(fields: [endUsersId], references: [id])
+  ltCourses             ltCourses            @relation(fields: [ltCoursesId], references: [id])
+  serbscriptionBundle   serbscriptionBundle? @relation(fields: [serbscriptionBundleId], references: [id])
+}
+
+model EducationBoard {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  country   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  isActive  Boolean    @default(true)
+  subjects  Subject[]
+  endUsers  endUsers[]
+}
+
+model Subject {
+  id               Int             @id @default(autoincrement())
+  name             String
+  code             String?         @unique
+  description      String?
+  educationBoardId Int
+  gradeLevel       Int?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  subjectBundleId  Int?
+  isActive         Boolean         @default(true)
+  chapters         Chapter[]
+  educationBoard   EducationBoard  @relation(fields: [educationBoardId], references: [id])
+  subjectBundle    subjectBundle?  @relation(fields: [subjectBundleId], references: [id])
+  TeachIntro       TeachIntro[]
+  ctest            ctest[]
+  ltCourses        ltCourses[]
+  mentor           mentor[]
+  qtest            qtest[]
+  session          session[]
+  subjectRecord    subjectRecord[]
+}
+
+model Chapter {
+  id                 Int      @id @default(autoincrement())
+  number             Int
+  title              String
+  description        String?
+  subjectId          Int
+  learningObjectives String[]
+  estimatedDuration  Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  subject            Subject  @relation(fields: [subjectId], references: [id])
+  topics             Topic[]
+}
+
+model Topic {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  content     String?
+  chapterId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chapter     Chapter  @relation(fields: [chapterId], references: [id])
+}
+
+model serbscriptionBundle {
+  id            Int            @id @default(autoincrement())
+  subscriptions subscription[]
+}
+
+model BigCourse {
+  id               Int                @id @default(autoincrement())
+  name             String
+  searchTags       String[]
+  prerequisites    String[]
+  syllabus         String[]
+  category         String?
+  description      String
+  level            String?
+  price            Float
+  currentPrice     Float
+  isLongTerm       Boolean            @default(true)
+  isFree           Boolean            @default(false)
+  startDate        DateTime           @default(now())
+  endDate          DateTime           @default(now())
+  averageRating    Float
+  duration         Float
+  thumbnailUrl     String
+  language         String
+  enrolledStudents Int                @default(0)
+  isActive         Boolean            @default(true)
+  createdOn        DateTime           @default(now())
+  modifiedOn       DateTime           @default(now())
+  grade            String             @default("1")
+  mentorList       Int[]
+  subjectList      Int[]
+  slug             String?
+  partialPrice     Float?
+  Bgreview         Bgreview[]
+  groupChat        GroupChat?
+  PtmSession       PtmSession[]
+  TeachIntro       TeachIntro[]
+  attendanceRecord attendanceRecord[]
+  ctest            ctest[]
+  discount         discount[]
+  leads2           leads2[]
+  mgSubsciption    mgSubsciption[]
+  qtest            qtest[]
+  session          session[]
+
+  // website related
+  isWebCreated Boolean       @default(false)
+  BigCourseWeb BigCourseWeb?
+}
+
+model mgSubsciption {
+  id            Int       @id @default(autoincrement())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  PurchasePrice Float
+  cgst          Float
+  sgst          Float
+  basePrice     Float
+  discount      Float
+  endUsersId    Int
+  bigCourseId   Int
+  OrderId       String?
+  isActive      Boolean   @default(true)
+  isPartialPaid Boolean   @default(false)
+  isFullPaid    Boolean   @default(true)
+  dueDate       DateTime?
+  course        BigCourse @relation(fields: [bigCourseId], references: [id])
+  user          endUsers  @relation(fields: [endUsersId], references: [id])
+
+  @@unique([endUsersId, bigCourseId])
+}
+
+model session {
+  id                       Int                  @id @default(autoincrement())
+  detail                   String
+  isDone                   Boolean              @default(false)
+  isGoingOn                Boolean              @default(false)
+  duration                 Int                  @default(30)
+  startTime                DateTime
+  endTime                  DateTime
+  mentorId                 Int
+  bigCourseId              Int
+  subjectId                Int
+  roomId                   String?
+  description              String?
+  tokenId                  String?
+  hostRecordingUrl         String?
+  screenRecordingUrl       String?
+  recordingUrl             String?
+  isNewRecording           Boolean?             @default(false)
+  vmIp                     String?
+  screenRecordingTimeStamp Json?
+  sessionStartTime         DateTime?
+  preSessionReminders      PreSessionReminder[]
+  quiz                     Quiz?
+  analytics                SessionAnalytics?    @relation("SessionToAnalytics")
+  feedbacks                SessionFeedback[]
+  SessionTest              SessionTest[]
+  attendanceRecord         attendanceRecord[]
+  qtest                    qtest[]
+  course                   BigCourse            @relation(fields: [bigCourseId], references: [id])
+  mentor                   mentor               @relation(fields: [mentorId], references: [id])
+  subject                  Subject              @relation(fields: [subjectId], references: [id])
+  sessionStreamInfo        sessionStreamInfo[]
+}
+
+model PtmSession {
+  id          Int       @id @default(autoincrement())
+  modifiedOn  DateTime  @default(now())
+  createdOn   DateTime  @default(now())
+  eventDate   DateTime
+  isGoingOn   Boolean   @default(false)
+  isDone      Boolean   @default(false)
+  streamToken String?
+  roomId      String?
+  bigCourseId Int
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+}
+
+model SessionTest {
+  id                    Int                     @id @default(autoincrement())
+  startTime             DateTime
+  endTime               DateTime
+  duration              Int                     @default(30)
+  modifiedOn            DateTime                @default(now())
+  createdOn             DateTime                @default(now())
+  sessionId             Int
+  mentorId              Int
+  createdBy             mentor                  @relation(fields: [mentorId], references: [id])
+  createdFor            session                 @relation(fields: [sessionId], references: [id])
+  sessionTestQuestion   sessionTestQuestion[]
+  sessionTestResponse   sessionTestResponse[]
+  sessionTestSubmission sessionTestSubmission[]
+}
+
+model sessionTestQuestion {
+  id                  Int                   @id @default(autoincrement())
+  type                qtype                 @default(multipleChoice)
+  question            String                @default("this is some question")
+  option1             String
+  option2             String
+  option3             String?
+  option4             String?
+  correctResponse     Int
+  sessionTestId       Int
+  modifiedOn          DateTime              @default(now())
+  createdOn           DateTime              @default(now())
+  test                SessionTest           @relation(fields: [sessionTestId], references: [id])
+  sessionTestResponse sessionTestResponse[]
+}
+
+model sessionTestSubmission {
+  id                  Int                   @id @default(autoincrement())
+  sessionTestId       Int
+  endUsersId          Int
+  modifiedOn          DateTime              @default(now())
+  createdOn           DateTime              @default(now())
+  sessionTestResponse sessionTestResponse[]
+  user                endUsers              @relation(fields: [endUsersId], references: [id])
+  test                SessionTest           @relation(fields: [sessionTestId], references: [id])
+}
+
+model sessionTestResponse {
+  id                      Int                   @id @default(autoincrement())
+  createdOn               DateTime              @default(now())
+  response                Int
+  sessionTestQuestionId   Int
+  sessionTestId           Int
+  endUsersId              Int
+  sessionTestSubmissionId Int
+  modifiedOn              DateTime              @default(now())
+  createdBy               endUsers              @relation(fields: [endUsersId], references: [id])
+  forTest                 SessionTest           @relation(fields: [sessionTestId], references: [id])
+  forQuestion             sessionTestQuestion   @relation(fields: [sessionTestQuestionId], references: [id])
+  submission              sessionTestSubmission @relation(fields: [sessionTestSubmissionId], references: [id])
+}
+
+model Bgreview {
+  id          Int       @id @default(autoincrement())
+  rating      Float
+  comment     String
+  createdOn   DateTime  @default(now())
+  bigCourseId Int
+  endUsersId  Int
+  modifiedOn  DateTime  @default(now())
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+  user        endUsers  @relation(fields: [endUsersId], references: [id])
+}
+
+model attendanceRecord {
+  id          Int       @id @default(autoincrement())
+  endUsersId  Int
+  bigCourseId Int
+  sessionId   Int
+  createdOn   DateTime  @default(now())
+  exitTime    DateTime?
+  modifiedOn  DateTime  @default(now())
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+  user        endUsers  @relation(fields: [endUsersId], references: [id])
+  session     session   @relation(fields: [sessionId], references: [id])
+
+  @@unique([endUsersId, bigCourseId, sessionId])
+}
+
+model TeachIntro {
+  id          Int       @id @default(autoincrement())
+  comment     String
+  mentorId    Int
+  subjectId   Int
+  bigCourseId Int
+  createdOn   DateTime  @default(now())
+  modifiedOn  DateTime  @default(now())
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+  mentor      mentor    @relation(fields: [mentorId], references: [id])
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+}
+
+model ctest {
+  id              Int               @id @default(autoincrement())
+  title           String
+  Duration        Int
+  startDate       DateTime
+  endDate         DateTime
+  bigCourseId     Int
+  subjectId       Int
+  mentorId        Int
+  createdOn       DateTime          @default(now())
+  modifiedOn      DateTime          @default(now())
+  cTestResponse   cTestResponse[]
+  course          BigCourse         @relation(fields: [bigCourseId], references: [id])
+  mentor          mentor            @relation(fields: [mentorId], references: [id])
+  subject         Subject           @relation(fields: [subjectId], references: [id])
+  ctestQuestions  ctestQuestions[]
+  ctestSubmission ctestSubmission[]
+}
+
+model ctestQuestions {
+  id              Int     @id @default(autoincrement())
+  type            qtype   @default(multipleChoice)
+  question        String  @default("this is some question text")
+  option1         String?
+  option2         String?
+  option3         String?
+  option4         String?
+  correctResponse Int
+
+  isSubjective     Boolean? @default(false)
+  maxWords         Int?
+  allowAttachments Boolean? @default(false)
+
+  ctestId       Int
+  createdOn     DateTime        @default(now())
+  modifiedOn    DateTime        @default(now())
+  cTestResponse cTestResponse[]
+  test          ctest           @relation(fields: [ctestId], references: [id])
+}
+
+model ctestSubmission {
+  id            Int             @id @default(autoincrement())
+  createAt      DateTime        @default(now())
+  ctestId       Int
+  endUsersId    Int
+  createdOn     DateTime        @default(now())
+  modifiedOn    DateTime        @default(now())
+  cTestResponse cTestResponse[]
+  ctest         ctest           @relation(fields: [ctestId], references: [id])
+  user          endUsers        @relation(fields: [endUsersId], references: [id])
+}
+
+model cTestResponse {
+  id                Int             @id @default(autoincrement())
+  createdOn         DateTime        @default(now())
+  response          Int?
+  subjectiveAnswer  String?
+  attachments       String[]        @default([])
+  endUsersId        Int
+  ctestQuestionsId  Int
+  ctestId           Int
+  ctestSubmissionId Int
+  modifiedOn        DateTime        @default(now())
+  forTest           ctest           @relation(fields: [ctestId], references: [id])
+  forQuestion       ctestQuestions  @relation(fields: [ctestQuestionsId], references: [id])
+  submission        ctestSubmission @relation(fields: [ctestSubmissionId], references: [id])
+  createdBy         endUsers        @relation(fields: [endUsersId], references: [id])
+}
+
+model subjectRecord {
+  id         Int      @id @default(autoincrement())
+  comment    String
+  subjectId  Int
+  mentorId   Int?
+  doubtId    Int?
+  createdOn  DateTime @default(now())
+  modifiedOn DateTime @default(now())
+  doubt      doubt?   @relation(fields: [doubtId], references: [id])
+  mentor     mentor?  @relation(fields: [mentorId], references: [id])
+  subject    Subject  @relation(fields: [subjectId], references: [id])
+}
+
+model discount {
+  id          Int       @id @default(autoincrement())
+  title       String
+  type        Int
+  minPurchase Float
+  maxValue    Float
+  validity    DateTime
+  isActive    Boolean
+  bigCourseId Int
+  createdOn   DateTime  @default(now())
+  modifiedOn  DateTime  @default(now())
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+}
+
+model sessionStreamInfo {
+  id         Int      @id @default(autoincrement())
+  roomId     String?
+  hostId     String?
+  Token      String?
+  StreamId   String?
+  vmIp       String?
+  sessionId  Int
+  createdOn  DateTime @default(now())
+  modifiedOn DateTime @default(now())
+  session    session  @relation(fields: [sessionId], references: [id])
+}
+
+model announcements {
+  id         Int      @id @default(autoincrement())
+  content    String
+  createAt   DateTime @default(now())
+  modifiedOn DateTime @default(now())
+}
+
+model leads2 {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String
+  phone       String
+  state       String?
+  city        String?
+  misc        String?
+  createdOn   DateTime  @default(now())
+  updatedOn   DateTime  @default(now())
+  bigCourseId Int
+  salesmanId  BigInt
+  status      String
+  course      BigCourse @relation(fields: [bigCourseId], references: [id])
+  salesman    salesman  @relation(fields: [salesmanId], references: [id])
+}
+
+model parent {
+  id        Int        @id @default(autoincrement())
+  name      String
+  phone     String     @unique
+  createdOn DateTime   @default(now())
+  users     endUsers[]
+}
+
+model teacherAttendanceRecord {
+  id         Int       @id @default(autoincrement())
+  loginTime  DateTime?
+  logoutTime DateTime?
+  status     String
+  createOn   DateTime  @default(now())
+  updateOn   DateTime  @default(now())
+  mentorId   Int
+  teacher    mentor    @relation(fields: [mentorId], references: [id])
+}
+
+model HrManager {
+  id       Int      @id @default(autoincrement())
+  email    String
+  password String
+  createOn DateTime @default(now())
+  updateOn DateTime @default(now())
+}
+
+model leaves {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  reason    String
+  mentorId  Int
+  status    String   @default("pending")
+  actor     String?
+  createOn  DateTime @default(now())
+  updateOn  DateTime @default(now())
+  mentor    mentor   @relation(fields: [mentorId], references: [id])
+}
+
+model defaultHolidays {
+  id         Int      @id @default(autoincrement())
+  day        DateTime
+  occasion   String
+  otherInfor String?
+}
+
+model inq {
+  id             Int      @id @default(autoincrement())
+  name           String
+  email          String
+  phone          String
+  message        String
+  createOn       DateTime @default(now())
+  updateOn       DateTime @default(now())
+  isTrialRequest Boolean
+  targetClass    String?
+  classBoard     String?
+}
+
+model salesManAttendanceRecord {
+  id         Int       @id @default(autoincrement())
+  loginTime  DateTime?
+  logoutTime DateTime?
+  status     String
+  createOn   DateTime  @default(now())
+  updateOn   DateTime  @default(now())
+  salesmanId BigInt
+  salesman   salesman  @relation(fields: [salesmanId], references: [id])
+}
+
+model Salesleaves {
+  id         Int      @id @default(autoincrement())
+  startDate  DateTime
+  endDate    DateTime
+  reason     String
+  status     String   @default("pending")
+  actor      String?
+  salesmanId BigInt
+  createOn   DateTime @default(now())
+  updateOn   DateTime @default(now())
+  salesman   salesman @relation(fields: [salesmanId], references: [id])
+}
+
+model asset {
+  id           Int            @id @default(autoincrement())
+  purchaseDate DateTime
+  BookValue    Float
+  assetName    String
+  assetType    String
+  assetSerial  String         @unique
+  assetStatus  String
+  createOn     DateTime       @default(now())
+  updateOn     DateTime       @default(now())
+  assetRecords assetRecords[]
+}
+
+model assetRecords {
+  id              Int      @id @default(autoincrement())
+  transactionType String
+  sender          String
+  reciever        String
+  condition       String
+  remark          String?
+  assetId         Int
+  createOn        DateTime @default(now())
+  updateOn        DateTime @default(now())
+  asset           asset    @relation(fields: [assetId], references: [id])
+}
+
+model doubtRecord {
+  id                    Int                     @id @default(autoincrement())
+  doubtsAsked           Int                     @default(0)
+  doubtsRemaining       Int                     @default(5)
+  endUsersId            Int
+  doubtPackagePurchases doubtPackagePurchases[]
+  user                  endUsers                @relation(fields: [endUsersId], references: [id])
+}
+
+model doubtPackagePurchases {
+  id            Int         @id @default(autoincrement())
+  endUsersId    Int?
+  doubtRecordId Int
+  orderID       String?
+  DoubtCount    Int
+  createOn      DateTime    @default(now())
+  updatedOn     DateTime    @default(now())
+  record        doubtRecord @relation(fields: [doubtRecordId], references: [id])
+  endUsers      endUsers?   @relation(fields: [endUsersId], references: [id])
+}
+
+model groupChatInfo {
+  id        Int      @id @default(autoincrement())
+  groupName String?
+  admins    String[]
+  students  String[]
+  createOn  DateTime @default(now())
+  updatedOn DateTime @default(now())
+  groupId   String
+}
+
+model RegterationLeads {
+  id                Int                @id @default(autoincrement())
+  name              String?
+  email             String?
+  phone             String
+  class             String
+  createdOn         DateTime           @default(now())
+  merrittoId        String?
+  orderId           String?
+  status            String?
+  utm_campaign      String?
+  utm_medium        String?
+  utm_source        String?
+  board             String?
+  demoSub           String?
+  courseName        String?
+  ref_id            String?
+  referredBy        String?
+  alternatePhone    String?
+  preffredLanguage  String?
+  leadQuizResponses LeadQuizResponse[]
+}
+
+model LeadQuizQuestion {
+  id        Int                @id @default(autoincrement())
+  question  String
+  type      String
+  options   String?
+  createdOn DateTime           @default(now())
+  responses LeadQuizResponse[]
+}
+
+model LeadQuizResponse {
+  id         Int              @id @default(autoincrement())
+  leadId     Int
+  questionId Int
+  answer     String
+  createdOn  DateTime         @default(now())
+  lead       RegterationLeads @relation(fields: [leadId], references: [id])
+  question   LeadQuizQuestion @relation(fields: [questionId], references: [id])
+}
+
+model qtest {
+  id              Int               @id @default(autoincrement())
+  title           String
+  Duration        Int
+  startDate       DateTime
+  endDate         DateTime
+  bigCourseId     Int
+  subjectId       Int?
+  mentorId        Int
+  createdOn       DateTime          @default(now())
+  modifiedOn      DateTime          @default(now())
+  sessionId       Int?
+  qTestResponse   qTestResponse[]
+  course          BigCourse         @relation(fields: [bigCourseId], references: [id])
+  mentor          mentor            @relation(fields: [mentorId], references: [id])
+  session         session?          @relation(fields: [sessionId], references: [id])
+  subject         Subject?          @relation(fields: [subjectId], references: [id])
+  qtestQuestions  qtestQuestions[]
+  qtestSubmission qtestSubmission[]
+}
+
+model qtestQuestions {
+  id              Int             @id @default(autoincrement())
+  type            qtype           @default(multipleChoice)
+  question        String          @default("this is some question text")
+  option1         String
+  option2         String
+  option3         String?
+  option4         String?
+  correctResponse Int
+  createdOn       DateTime        @default(now())
+  modifiedOn      DateTime        @default(now())
+  qtestId         Int
+  cTestResponse   qTestResponse[]
+  test            qtest           @relation(fields: [qtestId], references: [id])
+}
+
+model qtestSubmission {
+  id            Int             @id @default(autoincrement())
+  createAt      DateTime        @default(now())
+  endUsersId    Int
+  createdOn     DateTime        @default(now())
+  modifiedOn    DateTime        @default(now())
+  qtestId       Int?
+  qTestResponse qTestResponse[]
+  user          endUsers        @relation(fields: [endUsersId], references: [id])
+  qtest         qtest?          @relation(fields: [qtestId], references: [id])
+}
+
+model qTestResponse {
+  id                Int             @id @default(autoincrement())
+  createdOn         DateTime        @default(now())
+  response          Int
+  endUsersId        Int
+  qtestQuestionsId  Int
+  qtestId           Int
+  qtestSubmissionId Int
+  modifiedOn        DateTime        @default(now())
+  createdBy         endUsers        @relation(fields: [endUsersId], references: [id])
+  forTest           qtest           @relation(fields: [qtestId], references: [id])
+  forQuestion       qtestQuestions  @relation(fields: [qtestQuestionsId], references: [id])
+  submission        qtestSubmission @relation(fields: [qtestSubmissionId], references: [id])
+}
+
+model Quiz {
+  id        String     @id @default(uuid())
+  sessionId Int        @unique
+  createdAt DateTime   @default(now())
+  questions Question[]
+  session   session    @relation(fields: [sessionId], references: [id])
+}
+
+model Question {
+  id            String     @id @default(uuid())
+  quizId        String
+  type          String
+  questionId    String
+  question      String?
+  correctAnswer String
+  quiz          Quiz       @relation(fields: [quizId], references: [id])
+  responses     Response[]
+}
+
+model Response {
+  id             String   @id @default(uuid())
+  questionId     String
+  userId         Int
+  selectedAnswer String
+  isCorrect      Boolean  @default(false)
+  attemptedAt    DateTime @default(now())
+  timeTakenMs    Int?
+  question       Question @relation(fields: [questionId], references: [id])
+  user           endUsers @relation(fields: [userId], references: [id])
+}
+
+model GroupChat {
+  id            Int            @id @default(autoincrement())
+  bigCourseId   Int            @unique
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  groupType     GroupType      @default(ALL)
+  groupChatName String?
+  bigCourse     BigCourse      @relation(fields: [bigCourseId], references: [id])
+  members       GroupMember[]
+  messages      GroupMessage[]
+}
+
+model GroupMember {
+  id          Int           @id @default(autoincrement())
+  groupId     Int
+  userId      Int?
+  mentorId    Int?
+  adminId     Int?
+  isAdmin     Boolean       @default(false)
+  lastSeen    DateTime?
+  joinedAt    DateTime      @default(now())
+  admin       admin?        @relation(fields: [adminId], references: [id])
+  group       GroupChat     @relation(fields: [groupId], references: [id])
+  mentor      mentor?       @relation(fields: [mentorId], references: [id])
+  user        endUsers?     @relation(fields: [userId], references: [id])
+  ReadReceipt ReadReceipt[]
+}
+
+model GroupMessage {
+  id          Int           @id @default(autoincrement())
+  content     String
+  senderId    Int
+  senderType  String
+  groupId     Int
+  createdAt   DateTime      @default(now())
+  deliveredAt DateTime?
+  deleted     Boolean       @default(false)
+  deletedBy   String?
+  senderName  String?
+  imageUrl    String?
+  group       GroupChat     @relation(fields: [groupId], references: [id])
+  readBy      ReadReceipt[]
+}
+
+model ReadReceipt {
+  id        Int          @id @default(autoincrement())
+  messageId Int
+  memberId  Int
+  readAt    DateTime     @default(now())
+  member    GroupMember  @relation(fields: [memberId], references: [id])
+  message   GroupMessage @relation(fields: [messageId], references: [id])
+}
+
+model SessionAnalytics {
+  id                   Int                         @id @default(autoincrement())
+  sessionId            Int?                        @unique
+  classStartTime       DateTime
+  classEndTime         DateTime
+  actualDuration       Int
+  scheduledDuration    Int
+  earlyLeaveRate       Float?
+  lateJoinRate         Float?
+  finishRate           Float?
+  attendancePercentage Float?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  session              session?                    @relation("SessionToAnalytics", fields: [sessionId], references: [id])
+  studentIntervals     StudentAttendanceInterval[]
+  teacherAttendance    TeacherSessionAnalytics?
+}
+
+model StudentAttendanceInterval {
+  id               Int              @id @default(autoincrement())
+  analyticsId      Int
+  studentId        Int
+  joinTime         DateTime
+  leaveTime        DateTime?
+  duration         Int?
+  isEarlyLeave     Boolean?
+  isLateJoin       Boolean?
+  createdAt        DateTime         @default(now())
+  sessionAnalytics SessionAnalytics @relation(fields: [analyticsId], references: [id])
+  student          endUsers         @relation(fields: [studentId], references: [id])
+
+  @@index([analyticsId, studentId])
+}
+
+model TeacherSessionAnalytics {
+  id               Int              @id @default(autoincrement())
+  analyticsId      Int              @unique
+  teacherId        Int
+  startTime        DateTime
+  endTime          DateTime
+  totalDuration    Int
+  createdAt        DateTime         @default(now())
+  sessionAnalytics SessionAnalytics @relation(fields: [analyticsId], references: [id])
+  teacher          mentor           @relation(fields: [teacherId], references: [id])
+}
+
+model SessionFeedback {
+  id           Int      @id @default(autoincrement())
+  sessionId    Int
+  studentId    Int
+  rating       Int
+  techIssue    String?
+  sessionIssue String?
+  createdAt    DateTime @default(now())
+  general      String?
+  session      session  @relation(fields: [sessionId], references: [id])
+  student      endUsers @relation(fields: [studentId], references: [id])
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+}
+
+model AIRating {
+  id        Int       @id @default(autoincrement())
+  rating    Int
+  review    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    Int?
+  user      endUsers? @relation(fields: [userId], references: [id])
+}
+
+model SessionReminder {
+  id         Int      @id @default(autoincrement())
+  sessionId  Int
+  studentId  Int
+  lastSentAt DateTime @default(now())
+  attempt    Int      @default(1)
+
+  @@unique([sessionId, studentId])
+}
+
+model PreSessionReminder {
+  id        Int      @id @default(autoincrement())
+  sessionId Int
+  studentId Int
+  sentAt    DateTime @default(now())
+  type      String
+  session   session  @relation(fields: [sessionId], references: [id])
+  student   endUsers @relation(fields: [studentId], references: [id])
+
+  @@unique([sessionId, studentId, type])
+}
+
+model Content {
+  id                   Int                    @id @default(autoincrement())
+  title                String                 @db.VarChar(255)
+  category             Category
+  class                String                 @db.VarChar(5)
+  subject              SubjectEnum
+  s3Key                String                 @db.VarChar(500)
+  uploadedBy           Int
+  approverId           Int?
+  status               ContentStatus          @default(PENDING)
+  rejectionNote        String?
+  createdOn            DateTime               @default(now())
+  approvedOn           DateTime?
+  AuditLog             AuditLog[]
+  approver             mentor?                @relation("ContentApprover", fields: [approverId], references: [id])
+  mentor               mentor                 @relation("UploadedByMentor", fields: [uploadedBy], references: [id])
+  access               ContentAccess[]
+  ContentAccessRequest ContentAccessRequest[]
+}
+
+model ContentAccess {
+  id        Int      @id @default(autoincrement())
+  contentId Int
+  mentorId  Int
+  createdOn DateTime @default(now())
+  content   Content  @relation(fields: [contentId], references: [id])
+  mentor    mentor   @relation("ContentAccessMentor", fields: [mentorId], references: [id])
+
+  @@unique([contentId, mentorId])
+}
+
+model ContentAccessRequest {
+  id           Int           @id @default(autoincrement())
+  contentId    Int
+  requesterId  Int
+  reviewerId   Int?
+  mentorId     Int?
+  status       RequestStatus @default(PENDING)
+  decisionNote String?
+  createdOn    DateTime      @default(now())
+  decidedOn    DateTime?
+  AuditLog     AuditLog[]
+  content      Content       @relation(fields: [contentId], references: [id])
+  mentor       mentor?       @relation("MentorReviewer", fields: [mentorId], references: [id])
+  requester    mentor        @relation("AccessRequester", fields: [requesterId], references: [id])
+  reviewer     admin?        @relation(fields: [reviewerId], references: [id])
+
+  @@index([status])
+}
+
+model ApproverAssignment {
+  id       Int         @id @default(autoincrement())
+  grade    String      @db.VarChar(5)
+  subject  SubjectEnum
+  mentorId Int
+  mentor   mentor      @relation(fields: [mentorId], references: [id])
+  AuditLog AuditLog[]
+
+  @@unique([grade, subject])
+}
+
+model AuditLog {
+  id                   Int                   @id @default(autoincrement())
+  action               AuditAction
+  note                 String?               @db.VarChar(1000)
+  meta                 Json?
+  createdOn            DateTime              @default(now())
+  actorMentorId        Int?
+  actorAdminId         Int?
+  contentId            Int?
+  accessRequestId      Int?
+  approverAssignmentId Int?
+  accessRequest        ContentAccessRequest? @relation(fields: [accessRequestId], references: [id])
+  actorAdmin           admin?                @relation(fields: [actorAdminId], references: [id])
+  actorMentor          mentor?               @relation(fields: [actorMentorId], references: [id])
+  approverAssignment   ApproverAssignment?   @relation(fields: [approverAssignmentId], references: [id])
+  content              Content?              @relation(fields: [contentId], references: [id])
+
+  @@index([createdOn])
+  @@index([action])
+  @@index([contentId])
+  @@index([accessRequestId])
+}
+
+model OpenSession {
+  id           Int                     @id @default(autoincrement())
+  uuid         String                  @default(uuid())
+  mentorId     Int
+  title        String
+  description  String?
+  startTime    DateTime
+  endTime      DateTime?
+  randomNumber String?
+  isActive     Boolean                 @default(true)
+  isDone       Boolean                 @default(false)
+  isGoingOn    Boolean                 @default(false)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  grade        String?
+  mentor       mentor                  @relation(fields: [mentorId], references: [id])
+  attendance   OpenSessionAttendance[]
+  bookings     OpenSessionBooking[]
+  feedbacks    OpenSessionFeedback[]
+  quizzes      OpenSessionQuiz[]
+}
+
+model OpenSessionBooking {
+  id            Int         @id @default(autoincrement())
+  openSessionId Int
+  userId        Int
+  reminderSet   Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  openSession   OpenSession @relation(fields: [openSessionId], references: [id])
+  user          endUsers    @relation(fields: [userId], references: [id])
+}
+
+model OpenSessionAttendance {
+  id            Int                             @id @default(autoincrement())
+  openSessionId Int
+  userId        Int
+  openSession   OpenSession                     @relation(fields: [openSessionId], references: [id])
+  user          endUsers                        @relation(fields: [userId], references: [id])
+  intervals     OpenSessionAttendanceInterval[]
+}
+
+model OpenSessionAttendanceInterval {
+  id           Int                   @id @default(autoincrement())
+  attendanceId Int
+  joinTime     DateTime
+  leaveTime    DateTime?
+  attendance   OpenSessionAttendance @relation(fields: [attendanceId], references: [id])
+}
+
+model OpenSessionQuiz {
+  id            Int                       @id @default(autoincrement())
+  openSessionId Int
+  question      String
+  createdAt     DateTime                  @default(now())
+  openSession   OpenSession               @relation(fields: [openSessionId], references: [id])
+  responses     OpenSessionQuizResponse[]
+}
+
+model OpenSessionQuizResponse {
+  id        Int             @id @default(autoincrement())
+  quizId    Int
+  studentId Int
+  answer    String
+  isCorrect Boolean
+  createdAt DateTime        @default(now())
+  quiz      OpenSessionQuiz @relation(fields: [quizId], references: [id])
+  student   endUsers        @relation(fields: [studentId], references: [id])
+}
+
+model OpenSessionFeedback {
+  id            Int         @id @default(autoincrement())
+  openSessionId Int
+  studentId     Int
+  rating        Int
+  comments      String?
+  createdAt     DateTime    @default(now())
+  openSession   OpenSession @relation(fields: [openSessionId], references: [id])
+  student       endUsers    @relation(fields: [studentId], references: [id])
+}
+
+enum qtype {
+  multipleChoice
+  trueFalse
+  subjective
+}
+
+enum GroupType {
+  ADMIN_ONLY
+  MENTOR
+  ALL
+}
+
+enum SubjectEnum {
+  PHYSICS
+  CHEMISTRY
+  BIOLOGY
+  MATHS
+  ENGLISH
+  CODING
+  ROBOTICS
+  BRAIN_DEVELOPMENT
+  MOTIVATIONAL_SESSION
+}
+
+enum Category {
+  FIL
+  PC
+  LTC
+  FOUNDATION
+  YT
+  OTHERS
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuditAction {
+  CONTENT_UPLOAD
+  CONTENT_PREVIEW
+  CONTENT_APPROVE
+  CONTENT_REJECT
+  ACCESS_REQUEST_CREATE
+  ACCESS_REQUEST_APPROVE
+  ACCESS_REQUEST_REJECT
+  APPROVER_ASSIGN
+  APPROVER_REASSIGN
+}
+
+enum DeviceType {
+  ANDROID
+  IOS
+}
+
+// website contents below
+model classCardWeb {
+  id            Int      @id @default(autoincrement())
+  class         Int
+  educatorImage String
+  demoPrice     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+}
+
+model FeatureShowcaseSection {
+  id                String                   @id @default(cuid())
+  headingTop        String
+  headingMain       String
+  headingMainStyled Json?
+  title             String
+  titleStyled       Json?
+  subtitle          String
+  background        String?
+  order             Int?
+  features          FeatureShowcaseFeature[]
+  images            FeatureShowcaseImage[]
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+}
+
+model FeatureShowcaseFeature {
+  id          String                 @id @default(cuid())
+  sectionId   String
+  section     FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
+  title       String
+  description String
+  order       Int?
+}
+
+model FeatureShowcaseImage {
+  id        String                 @id @default(cuid())
+  sectionId String
+  section   FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
+  url       String
+  alt       String?
+  position  String?
+  order     Int?
+}
+
+model WebLinks {
+  id                 String @id @default(cuid())
+  laptopVideoLink    String
+  webBannerImageLink String
+}
+
+model TestimonialReel {
+  id    String @id @default(cuid())
+  url   String
+  order Int
+}
+
+model TestimonialCard {
+  id             String   @id @default(cuid())
+  name           String
+  role           String
+  grade          String?
+  profileImage   String?
+  content        String
+  studentName    String?
+  courseEnrolled String?
+  order          Int      @default(0)
+  isVisible      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model FacultyMemberWebCard {
+  id              String   @id @default(cuid())
+  name            String
+  designation     String
+  qualification   String?
+  experienceText  String?
+  experienceYears Int?
+  imageUrl        String?
+  order           Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BigCourseWeb {
+  id              Int          @id @default(autoincrement())
+  bigCourseId     Int          @unique
+  bigCourse       BigCourse    @relation(fields: [bigCourseId], references: [id])
+  createdWeb      Boolean      @default(true)
+  courseDemoPrice Float?
+  webLabel        String?
+  courseVideoLink String?
+  promoteCourses  Int[]
+  subjects        SubjectWeb[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model SubjectWeb {
+  id             Int          @id @default(autoincrement())
+  bigCourseWebId Int
+  bigCourseWeb   BigCourseWeb @relation(fields: [bigCourseWebId], references: [id])
+  name           String
+  subtitle       String?
+  taglinePoints  String[]
+  chapters       ChapterWeb[]
+}
+
+model ChapterWeb {
+  id             Int        @id @default(autoincrement())
+  subjectWebId   Int
+  subjectWeb     SubjectWeb @relation(fields: [subjectWebId], references: [id])
+  title          String
+  chapterNumber  Int?
+  syllabusPoints String[]
+}
+
+model Blog {
+  id            String    @id @default(cuid())
+  title         String
+  banner        String?
+  des           String?   @db.VarChar(250)
+  content       Json?
+  authorName    String
+  authorProfile String?
+  deleted       Boolean   @default(false)
+  deletedAt     DateTime?
+
+  activityLikes          Int @default(0)
+  activityComments       Int @default(0)
+  activityReads          Int @default(0)
+  activityParentComments Int @default(0)
+
+  draft       Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  comments Comment[]
+  tags     BlogTag[]
+  likedBy  BlogLike[]
+
+  @@map("blogs")
+}
+
+model Comment {
+  id     String @id @default(cuid())
+  blogId String
+  blog   Blog   @relation(fields: [blogId], references: [id])
+
+  comment  String
+  isReply  Boolean   @default(false)
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  children Comment[] @relation("CommentReplies")
+
+  commentedById Int
+  commentedBy   endUsers @relation(fields: [commentedById], references: [id])
+
+  commentedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("comments")
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  blogs BlogTag[]
+
+  @@map("tags")
+}
+
+model BlogTag {
+  id     String @id @default(cuid())
+  blogId String
+  tagId  String
+
+  blog Blog @relation(fields: [blogId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@unique([blogId, tagId])
+  @@map("blog_tags")
+}
+
+model BlogLike {
+  id      String   @id @default(cuid())
+  blogId  String
+  userId  Int
+  likedAt DateTime @default(now())
+
+  blog Blog     @relation(fields: [blogId], references: [id])
+  user endUsers @relation(fields: [userId], references: [id])
+
+  @@unique([blogId, userId])
+  @@map("blog_likes")
+}
+
+model News {
+  id            String    @id @default(cuid())
+  title         String
+  banner        String?
+  des           String?   @db.VarChar(250)
+  content       Json?
+  authorName    String
+  authorProfile String?
+  publishedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deleted       Boolean   @default(false)
+  deletedAt     DateTime?
+
+  @@map("news")
+}
+
+model SubAdmin {
+  id          String  @id @default(cuid())
+  name        String
+  email       String  @unique
+  password    String  @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  role        String  @default("subadmin")
+  permissions Json    @default("{}")
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GlobalMaterial {
+  id         String   @id @default(cuid())
+  className  String
+  type       String
+  fileName   String
+  fileUrl    String
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+  size       Int?
+  mimeType   String?
+
+  @@index([className])
+  @@index([type])
+}
+
+model WebBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  href      String?
+  createdAt DateTime @default(now())
+}
+
+model WebVideo {
+  id        String   @id @default(cuid())
+  videoLink String
+  createdAt DateTime @default(now())
+}
+
+model BlogAdBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  href      String?
+  createdAt DateTime @default(now())
+}
+
+model CoursePageBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  href      String?
+  createdAt DateTime @default(now())
+}
+
+model sipCraousel1 {
+  id        String   @id @default(cuid())
+  imageLink String
+  order     Int      @default(0)
+  href      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model sipCraousel2 {
+  id        String   @id @default(cuid())
+  imageLink String
+  order     Int      @default(0)
+  href      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SipAppointmentLead {
+  id             String   @id @default(cuid())
+  countryCode    String   @default("IN")
+  mobileNumber   String
+  name           String
+  role           String
+  institute      String?
+  location       String?
+  preferredBoard String
+  createdAt      DateTime @default(now())
+}
+
+model SipMentor {
+  id         String   @id @default(cuid())
+  name       String
+  institute  String?
+  imageLink  String?
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+

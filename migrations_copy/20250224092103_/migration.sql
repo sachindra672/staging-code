@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "RegterationLeads" ADD COLUMN     "createdOn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

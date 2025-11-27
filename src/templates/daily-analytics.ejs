@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #02bdfe;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #02bdfe;
+            font-weight: bold;
+            margin: 5px 0;
+            padding: 6px;
+        }
+
+        .interval-box {
+            margin-left: 12px;
+            font-size: 13px;
+        }
+
+        .course-title {
+            margin-top: 35px;
+            font-size: 20px;
+            color: #02bdfe;
+            font-weight: bold;
+        }
+
+        .accordion {
+            background: #f8f9fb;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>📊 Daily Session Analytics Summary</h2>
+    <p style="text-align:center;">Report for: <strong>
+            <%= date %>
+        </strong></p>
+
+    <% courses.forEach(course=> { %>
+
+        <div class="course-title">📘 Course: <%= course.name %>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Session Name</th>
+                    <th>Class</th>
+                    <th>Teacher Start</th>
+                    <th>Teacher End</th>
+                    <th>Scheduled</th>
+                    <th>Actual</th>
+                    <th>Students</th>
+                    <th>Finish%</th>
+                    <th>Late%</th>
+                    <th>Early%</th>
+                    <th>Homework</th>
+                    <th>Teacher</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <% course.sessions.forEach((s, idx)=> { %>
+
+                    <tr>
+                        <td>
+                            <%= idx + 1 %>
+                        </td>
+                        <td>
+                            <%= s.detail %>
+                        </td>
+                        <td>
+                            <%= s.grade %>
+                        </td>
+                        <td>
+                            <%= s.teacherStart %>
+                        </td>
+                        <td>
+                            <%= s.teacherEnd %>
+                        </td>
+                        <td>
+                            <%= s.scheduled %> min
+                        </td>
+                        <td>
+                            <%= s.actual %> min
+                        </td>
+                        <td>
+                            <%= s.studentCount %>
+                        </td>
+                        <td>
+                            <%= s.finishRate %>%
+                        </td>
+                        <td>
+                            <%= s.lateRate %>%
+                        </td>
+                        <td>
+                            <%= s.earlyRate %>%
+                        </td>
+                        <td>
+                            <%= s.homework %>
+                        </td>
+                        <td>
+                            <%= s.teacherName %>
+                        </td>
+                    </tr>
+
+                    <!-- STUDENT ACCORDION -->
+                    <tr>
+                        <td colspan="20">
+                            <details class="accordion">
+                                <summary>👩‍🎓 View Student Details (<%= s.studentCount %>)</summary>
+
+                                <table style="margin-top:10px;">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Total Duration</th>
+                                            <th>Late</th>
+                                            <th>Early Leave</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <% s.students.forEach((stu, i)=> { %>
+                                            <tr>
+                                                <td>
+                                                    <%= i + 1 %>
+                                                </td>
+                                                <td>
+                                                    <%= stu.name %>
+                                                </td>
+                                                <td>
+                                                    <%= stu.email %>
+                                                </td>
+                                                <td>
+                                                    <%= stu.duration %> min
+                                                </td>
+                                                <td>
+                                                    <%= stu.isLate ? "⏰" : "" %>
+                                                </td>
+                                                <td>
+                                                    <%= stu.isEarly ? "🚪" : "" %>
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td colspan="6">
+                                                    <b>Intervals:</b><br />
+                                                    <% stu.intervals.forEach(iv=> { %>
+                                                        <div class="interval-box">
+                                                            • <%= iv.join %> → <%= iv.leave %> (<%= iv.duration %> min)
+                                                        </div>
+                                                        <% }) %>
+                                                </td>
+                                            </tr>
+                                            <% }) %>
+                                    </tbody>
+                                </table>
+
+                            </details>
+                        </td>
+                    </tr>
+
+                    <% }) %>
+            </tbody>
+        </table>
+
+        <% }) %>
+
+            <p style="text-align:center; margin-top:40px; color:#777;">
+                This is an automated report from <strong>SISYA CLASS</strong>
+            </p>
+
+</body>
+
+</html>
