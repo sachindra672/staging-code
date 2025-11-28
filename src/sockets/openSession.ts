@@ -1,7 +1,7 @@
 import { MediaKind, Worker } from "mediasoup/node/lib/types";
 import { Namespace, Server as SocketIOServer, Socket } from "socket.io";
 import { createOpenSessionRoomWithBalancedWorker, removeOpenSessionRoom } from "../mediasoup/createOpenSessionRoomWithBalancedWorker";
-import { addPeerToOpenSessionRoom, getOpenSessionRoom } from "../mediasoup/openSessionRoomManager";
+import { addPeerToOpenSessionRoom, getOpenSessionRoom, deleteOpenSessionRoom } from "../mediasoup/openSessionRoomManager";
 import { setupOpenSessionChatHandlers } from "./openSessionChatHandler";
 
 type CallbackResponse = { success: boolean; hasMediaControl?: boolean; error?: string };
@@ -675,6 +675,17 @@ export const openSessionSocketHandler = (
                         socketId: p.socketId,
                     })),
             );
+
+            // 🧹 CRITICAL FIX: Remove empty room to prevent memory leak
+            if (room.peers.size === 0) {
+                console.log(`🧹 Removing empty open session room: ${sessionId}`);
+                deleteOpenSessionRoom(sessionId);
+                
+                // Also cleanup chat settings for this session
+                if ((socket as any)._chatCleanup) {
+                    (socket as any)._chatCleanup();
+                }
+            }
         } catch (err) {
             console.error("disconnect cleanup error:", err);
         }

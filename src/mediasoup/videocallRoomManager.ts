@@ -58,4 +58,20 @@ export const removePeerFromVideoRoom = (callId: string, peerId: string) => {
     room.peers.delete(peerId);
 };
 
+// 🧹 CRITICAL FIX: Add function to delete empty video rooms
+export const deleteVideoRoom = (callId: string) => {
+    const room = videoRooms.get(callId);
+    if (!room) return;
+    
+    // Close all remaining resources
+    room.peers.forEach(peer => {
+        peer.producers.forEach(p => { try { p.close(); } catch {} });
+        peer.consumers.forEach(c => { try { c.close(); } catch {} });
+        peer.transports.forEach(t => { try { t.close(); } catch {} });
+    });
+    
+    videoRooms.delete(callId);
+    console.log(`✅ Video room deleted: ${callId}`);
+};
+
 

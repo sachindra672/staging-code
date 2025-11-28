@@ -215,8 +215,10 @@ export async function stopRecordingBridge(
 ) {
   const { kind, stoppedAt = Date.now() } = options;
 
-  if (kind) clearGraceTimer(sessionId, kind);
-  else {
+  if (kind) {
+    clearGraceTimer(sessionId, kind);
+  } else {
+    // 🧹 CRITICAL FIX: Clear all timers for this session
     clearGraceTimer(sessionId, "audio");
     clearGraceTimer(sessionId, "video");
     clearGraceTimer(sessionId, "screen");

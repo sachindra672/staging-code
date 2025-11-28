@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { MediaKind, Worker } from 'mediasoup/node/lib/types';
 import { createVideoRoomWithBalancedWorker } from '../mediasoup/createVideoRoomWithBalancedWorker';
-import { addPeerToVideoRoom, getVideoRoom } from '../mediasoup/videocallRoomManager';
+import { addPeerToVideoRoom, getVideoRoom, deleteVideoRoom } from '../mediasoup/videocallRoomManager';
 
 export const videocallSocketHandlerNew = (
     io: Server,
@@ -477,6 +477,13 @@ export const videocallSocketHandlerNew = (
 
             room.peers.delete(user.info.uuid);
             socket.leave(callId);
+
+            // 🧹 CRITICAL FIX: Remove empty video room to prevent memory leak
+            if (room.peers.size === 0) {
+                console.log(`🧹 Removing empty video call room: ${callId}`);
+                deleteVideoRoom(callId);
+            }
+
             console.log('[VC] Disconnect cleanup done', { callId, userId: user.info.uuid });
         } catch (err) {
             console.error('[VC] disconnect cleanup error', { err });

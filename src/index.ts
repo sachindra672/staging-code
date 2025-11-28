@@ -80,7 +80,7 @@ import upload from './middlewares/multer';
 import { AccessRequestReview, AdminAuditLogs, ApproverAssign, ContentPreview, ContentRequestAccess, ContentReview, ContentUpload } from './content';
 import { authAdmin, authAdminOrMentor, authAnyone, authMentor, authUser } from './middlewares/auth';
 import { createWorkers } from './mediasoup/createWorkers';
-import { classroomSocketHandler } from './sockets/classroom';
+// import { classroomSocketHandler } from './sockets/classroom';
 import { openSessionSocketHandler } from './sockets/openSession';
 import { bookSession, createOpenSession, deleteOpenSession, getOpenSessionById, getOpenSessions, startOpenSession, updateOpenSession } from './openSessionController';
 import { pdfHandler } from './pdfHandler';
@@ -548,7 +548,7 @@ app.post('/get_feedback_status', authUser, getFeedbackStatus);
 app.post('/submit_feedback', authUser, submitFeedback);
 app.post('/get_course_feedback', authUser, authUser, getCourseFeedback);
 app.post('/create_ai_review', authUser, createAiReview)
-app.post('/get_ai_review', authUser, getAllAiReview)
+app.post('/get_ai_review', getAllAiReview)
 app.post("/get_banner_list", authUser, getFreeBannerList)
 app.post("/get_student_course_attendence_record", authUser, getStudentAttendanceRecords)
 app.post("/get_my_vm_ip",GetVMIP);
@@ -786,7 +786,7 @@ openSessionNamespace.on("connection", (socket: CustomSocket) => {
 io.on('connection', (socket: CustomSocket) => {
   SocketToUserIdMap.set(socket.user.id, socket.id)
 
-  classroomSocketHandler(io, socket, workers);
+//  classroomSocketHandler(io, socket, workers);
   videocallSocketHandlerNew(io, socket, workers);
 
   socket.on("set:role:teacher", () => {
@@ -794,8 +794,10 @@ io.on('connection', (socket: CustomSocket) => {
     socket.role = "teacher"
   })
 
-  // socket.on('disconnect', () => { SocketToUserIdMap.delete(socket.user.id) });
+  // 🧹 CRITICAL FIX: Cleanup socket map on disconnect
   socket.on('disconnect', () => {
+    SocketToUserIdMap.delete(socket.user.id);
+    
     const entry = [...onlineUsers.entries()].find(([_, value]) => value.socketId === socket.id);
 
     if (entry) {
@@ -815,6 +817,7 @@ io.on('connection', (socket: CustomSocket) => {
 
   socket.on('send_message', ({ to, type, content }) => {
     const senderId = SocketToUserIdMap.get(to)
+    console.log({to,type,content})
     if (senderId) {
       insertMessage(to, socket.user.id, type, content, true)
       socket.to(senderId).emit("accept_message", { type, content, from: socket.user.id })

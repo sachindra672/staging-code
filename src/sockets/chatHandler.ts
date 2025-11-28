@@ -226,5 +226,12 @@ export const setupChatHandlers = (
         socket.off("unmute-user", unmuteUserHandler);
         socket.off("set-global-mute", setGlobalMuteHandler);
         socket.off("set-chat-mode", setChatModeHandler);
+
+        // 🧹 CRITICAL FIX: Cleanup chat settings when session is empty
+        const socketsInRoom = io.sockets.adapter.rooms.get(sessionId);
+        if (!socketsInRoom || socketsInRoom.size === 0) {
+            sessionChatSettings.delete(sessionId);
+            console.log(`🧹 Cleaned up chat settings for session: ${sessionId}`);
+        }
     };
 };

@@ -20,7 +20,7 @@ const operationsClient = new ZoneOperationsClient();
 
 // Base image for all class VMs
 const BASE_IMAGE =
-  "https://www.googleapis.com/compute/v1/projects/sisya-class-52660/global/images/mediasoup-template-updated-22";
+  "https://www.googleapis.com/compute/v1/projects/sisya-class-52660/global/images/mediasoup-template-updated-14";
 
 /**
  * 🚀 Create a new class VM
