@@ -74,6 +74,7 @@ export async function InsertLtCourse(req: Request, res: Response) {
         fs.mkdirSync(thumbnailDir, { recursive: true });
 
         // Write the file
+        //@ts-ignore
         fs.writeFileSync(thumbnailPath, thumbnailBuffer);
 
         // Update the course with the correct thumbnail path
@@ -164,6 +165,7 @@ export async function UpdateLtCourse(req: Request, res: Response) {
         if (thumbnailUrl) {
             const thumbnailBuffer = Buffer.from(thumbnailUrl, 'base64');
             const thumbnailPath = path.join(__dirname, '../thumbs/ltcourses', `${id}.jpg`);
+            //@ts-ignore
             fs.writeFileSync(thumbnailPath, thumbnailBuffer);
             updateData.thumbnailUrl = thumbnailPath;
         }

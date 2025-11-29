@@ -8,16 +8,17 @@ const MessageInsertQuery = `INSERT INTO "Messages"("toUUID", "fromUUID", type, c
 const MarkMessagesReadQuery = ` UPDATE Messages  SET "isRead" = true WHERE id = ANY($1::bigint[]);`;
 
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'ramkey',
-    password: 'password',
+    user: 'SISYA192025',
+    host: '10.160.0.47',
+    database: 'sisya',
+    password: 'SISYACLASS192025',
     port: 5432,
 });
 
 
 export async function insertMessage(to: string, from: string, type: string, content: string, isread: boolean) {
     try {
+        console.log()
         await pool.query(MessageInsertQuery, [to, from, type, content, isread]);
     } catch (err) {
         console.error('Error inserting message:', err);

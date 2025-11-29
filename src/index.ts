@@ -817,9 +817,10 @@ io.on('connection', (socket: CustomSocket) => {
 
   socket.on('send_message', ({ to, type, content }) => {
     const senderId = SocketToUserIdMap.get(to)
-    console.log({to,type,content})
+    // console.log({to,type,content})
     if (senderId) {
       insertMessage(to, socket.user.id, type, content, true)
+      console.log({ to, "from": socket.user.id, type, content })
       socket.to(senderId).emit("accept_message", { type, content, from: socket.user.id })
     } else { insertMessage(to, socket.user.id, type, content, false) }
   });
