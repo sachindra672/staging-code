@@ -56,3 +56,28 @@ export async function GetUsersByBigCourse(req: Request, res: Response) {
         res.status(500).json({ success: false, error })
     }
 }
+
+export async function GetUsersByBigCourse2(req: Request, res: Response) {
+    const { bigCourseId } = req.body;
+
+    if (!bigCourseId) {
+        return res.status(400).json({ success: false, message: "Invalid course id" });
+    }
+
+    try {
+        const subscriptions = await prisma.mgSubsciption.findMany({
+            where: { bigCourseId, isActive: true },
+            include: { user: true }
+        });
+
+        const users = subscriptions.map(item => {
+            const { password, ...sanitizedUser } = item.user; 
+            return sanitizedUser;
+        });
+
+        return res.json({ success: true, users });
+    } catch (error: any) {
+        console.error("Error fetching users by big course:", error);
+        return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+    }
+}

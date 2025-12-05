@@ -25,28 +25,65 @@ const BASE_IMAGE =
 /**
  * 🚀 Create a new class VM
  * Automatically picks a free IP from Redis, creates VM in correct zone, configures Nginx
+ * Uses distributed lock to prevent race conditions
  */
 export async function createClassVM(classId: string) {
   console.log(`🚀 Creating new VM for class-${classId}...`);
-     
-  // Step 1 — Get a free IP slot from Redis
-  const slotIds = await redis.smembers(SLOT_SET);
-  if (!slotIds.length) throw new Error("No IP slots available in Redis");
-
+  
+  // Global lock to prevent concurrent slot selection
+  const globalLockKey = "lock:vm-slot-selection";
+  const lockTimeout = 30; // 30 seconds
+  
   let selectedSlot: any = null;
-  for (const slotId of slotIds) {
-    const data = await redis.get(SLOT_PREFIX + slotId);
-    if (!data) continue;
-    const slot = JSON.parse(data);
-    if (slot.status === "free") {
-      selectedSlot = slot;
-      break;
+  let lockAcquired = false;
+  
+  try {
+    // Try to acquire lock with retry (max 10 attempts = 5 seconds)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const acquired = await redis.set(globalLockKey, classId, "EX", lockTimeout, "NX");
+      if (acquired === "OK") {
+        lockAcquired = true;
+        console.log(`[vm] Lock acquired for class-${classId}`);
+        break;
+      }
+      console.log(`[vm] Waiting for lock... (attempt ${attempt + 1}/10)`);
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+    }
+    
+    if (!lockAcquired) {
+      throw new Error("Could not acquire lock for VM creation after 5 seconds");
+    }
+     
+    // Step 1 — Get a free IP slot from Redis (protected by lock)
+    const slotIds = await redis.smembers(SLOT_SET);
+    if (!slotIds.length) throw new Error("No IP slots available in Redis");
+
+    for (const slotId of slotIds) {
+      const data = await redis.get(SLOT_PREFIX + slotId);
+      if (!data) continue;
+      const slot = JSON.parse(data);
+      if (slot.status === "free") {
+        // Immediately mark as reserved in Redis before releasing lock
+        slot.status = "in-use";
+        slot.currentInstance = `class-${classId}`;
+        slot.lastUsedAt = new Date().toISOString();
+        await redis.set(SLOT_PREFIX + slotId, JSON.stringify(slot));
+        
+        selectedSlot = slot;
+        console.log(`[vm] Reserved slot: ${slotId} -> ${slot.ip} in ${slot.zone}`);
+        break;
+      }
+    }
+
+    if (!selectedSlot) throw new Error("No free IP slots available");
+    
+  } finally {
+    // Always release lock
+    if (lockAcquired) {
+      await redis.del(globalLockKey);
+      console.log(`[vm] Lock released for class-${classId}`);
     }
   }
-
-  if (!selectedSlot) throw new Error("No free IP slots available");
-
-  console.log(`[vm] Selected slot: ${selectedSlot.slotId} -> ${selectedSlot.ip} in ${selectedSlot.zone}`);
 
   const zone = selectedSlot.zone; // full zone like "asia-south2-b"
   const ip = selectedSlot.ip;
@@ -139,20 +176,24 @@ echo "🎉 Startup complete for $CLASS_SUBDOMAIN" >> $LOG_FILE
   console.log(`[vm] Waiting for VM ${vmName} creation operation to complete...`);
 
   // Step 3a — Wait for operation to complete
-  await operationsClient.wait({
-    operation: operation.name!,
-    project: PROJECT_ID,
-    zone,
-  });
+  try {
+    await operationsClient.wait({
+      operation: operation.name!,
+      project: PROJECT_ID,
+      zone,
+    });
 
-  // Step 4 — Update Redis
-  selectedSlot.status = "in-use";
-  selectedSlot.currentInstance = vmName;
-  selectedSlot.lastUsedAt = new Date().toISOString();
-  await redis.set(SLOT_PREFIX + selectedSlot.slotId, JSON.stringify(selectedSlot));
-
-  console.log(`✅ VM ${vmName} created and IP slot ${selectedSlot.slotId} marked as in-use`);
-  return { vmName, ip, domain, zone };
+    console.log(`✅ VM ${vmName} created successfully with IP slot ${selectedSlot.slotId}`);
+    return { vmName, ip, domain, zone };
+    
+  } catch (error) {
+    // If VM creation fails, revert Redis slot to free
+    console.error(`❌ VM creation failed, reverting slot ${selectedSlot.slotId} to free`);
+    selectedSlot.status = "free";
+    selectedSlot.currentInstance = null;
+    await redis.set(SLOT_PREFIX + selectedSlot.slotId, JSON.stringify(selectedSlot));
+    throw error;
+  }
 }
 
 /**

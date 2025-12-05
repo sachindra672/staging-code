@@ -276,19 +276,20 @@ model submission {
 }
 
 model doubt {
-  id            Int             @id @default(autoincrement())
-  createdOn     DateTime        @default(now())
-  modifiedOn    DateTime        @default(now())
-  description   String
-  subject       String          @db.VarChar(255)
-  topic         String          @db.VarChar(255)
-  status        Int
-  userId        Int
-  mentorId      Int?
-  assignee      mentor?         @relation(fields: [mentorId], references: [id])
-  asker         endUsers        @relation(fields: [userId], references: [id])
-  doubtResponse doubtResponse[]
-  subjectRecord subjectRecord[]
+  id             Int             @id @default(autoincrement())
+  createdOn      DateTime        @default(now())
+  modifiedOn     DateTime        @default(now())
+  description    String
+  subject        String          @db.VarChar(255)
+  topic          String          @db.VarChar(255)
+  status         Int
+  userId         Int
+  mentorId       Int?
+  conversationId Int?
+  assignee       mentor?         @relation(fields: [mentorId], references: [id])
+  asker          endUsers        @relation(fields: [userId], references: [id])
+  doubtResponse  doubtResponse[]
+  subjectRecord  subjectRecord[]
 }
 
 model doubtResponse {
@@ -1298,13 +1299,15 @@ model SessionFeedback {
 }
 
 model AIRating {
-  id        Int       @id @default(autoincrement())
-  rating    Int
-  review    String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  userId    Int?
-  user      endUsers? @relation(fields: [userId], references: [id])
+  id             Int       @id @default(autoincrement())
+  rating         Int
+  review         String
+  conversationId Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  userId         Int?
+  isVisible      Boolean   @default(true)
+  user           endUsers? @relation(fields: [userId], references: [id])
 }
 
 model SessionReminder {
@@ -1856,12 +1859,345 @@ model SipAppointmentLead {
 }
 
 model SipMentor {
-  id         String   @id @default(cuid())
-  name       String
-  institute  String?
-  imageLink  String?
-  order      Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  institute String?
+  imageLink String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
+// sisya coin things below
+enum OwnerType {
+  ENDUSER
+  MENTOR
+  SALESMAN
+  ADMIN
+  SUBADMIN
+  SYSTEM // TODO- run script, first baar for creating system wallet
+}
+
+model SisyaWallet {
+  id        String    @id @default(cuid())
+  ownerType OwnerType
+  ownerId   Int
+
+  spendableBalance Decimal @default("0")
+  rewardBudget     Decimal @default("0")
+
+  lockedAmount Decimal @default("0")
+  totalEarned  Decimal @default("0")
+  totalSpent   Decimal @default("0")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions    SisyaTransaction[]
+  locks           SisyaLock[]
+  auditLogs       SisyaAuditLog[]
+  rewards         SisyaReward[]
+  purchases       SisyaFiatPurchase[]
+  orders          SisyaStoreOrder[]
+  rewardUsage     SisyaRewardUsage[]
+  rewardLimitUser SisyaRewardLimitUser?
+  expiryBalances  SisyaExpiryBalance[] // TODO:- spend mai pahle expiry balance use karna h then use normal
+
+  @@unique([ownerType, ownerId])
+}
+
+enum TxType {
+  TASK_REWARD
+  MANUAL_REWARD
+  MANUAL_REWARD_BUDGET
+
+  TRANSFER
+  DEDUCT
+  BONUS
+
+  PURCHASE
+  PURCHASE_REFUND
+
+  PURCHASE_ITEM
+  PURCHASE_ITEM_REFUND
+
+  MINT
+  BURN
+  EXPIRE
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum BalanceType {
+  SPENDABLE
+  REWARD_BUDGET
+}
+
+model SisyaTransaction {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  type   TxType
+  status TxStatus @default(COMPLETED)
+
+  amount Decimal
+  fee    Decimal @default("0")
+
+  balanceBefore Decimal
+  balanceAfter  Decimal
+
+  balanceType          BalanceType?
+  counterpartyWalletId String?
+  metadata             Json?
+  reference            String?      @unique
+  createdAt            DateTime     @default(now())
+
+  initiatedByType OwnerType?
+  initiatedById   Int?
+
+  @@index([walletId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum LockType {
+  VEST
+  PROMO
+  STAKE
+}
+
+model SisyaLock {
+  id       String      @id @default(cuid())
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  amount    Decimal
+  remaining Decimal
+
+  reason   String?
+  lockType LockType
+
+  startsAt  DateTime
+  unlocksAt DateTime
+
+  isReleased Boolean   @default(false)
+  releasedAt DateTime?
+
+  @@index([walletId])
+  @@index([unlocksAt])
+}
+
+model SisyaExpiryBalance {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  amountTotal   Decimal // total coins given in this batch
+  amountUsed    Decimal @default("0")
+  amountExpired Decimal @default("0")
+
+  expiresAt DateTime
+  issuedAt  DateTime @default(now())
+  reason    String?
+
+  isExpired Boolean   @default(false)
+  expiredAt DateTime?
+
+  @@index([walletId])
+  @@index([expiresAt])
+}
+
+model SisyaReward {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  taskCode    String
+  coinsEarned Decimal
+  createdAt   DateTime @default(now())
+
+  metadata Json?
+
+  @@unique([walletId, taskCode])
+}
+
+model SisyaAuditLog {
+  id       String      @id @default(cuid())
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  action    String
+  actorType OwnerType
+  actorId   Int
+
+  before Decimal
+  delta  Decimal
+  after  Decimal
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([walletId])
+  @@index([createdAt])
+}
+
+model SisyaRate {
+  id Int @id @default(autoincrement())
+
+  baseCurrency String
+  coinsPerUnit Decimal
+  offerPercent Int?
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  isActive      Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([isActive])
+  @@index([baseCurrency])
+}
+
+model SisyaFiatPurchase {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  ownerType OwnerType
+  ownerId   Int
+
+  amountFiat  Decimal
+  currency    String
+  coinsIssued Decimal
+
+  paymentProvider String?
+  providerRef     String? @unique
+  signature       String?
+
+  status   TxStatus @default(PENDING)
+  metadata Json?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model SisyaStoreItem {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+  imageUrl    String?
+
+  priceCoins    Decimal
+  originalCoins Decimal?
+  stock         Int      @default(0)
+  isActive      Boolean  @default(true)
+  category      String?
+  metadata      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders SisyaStoreOrderItem[]
+}
+
+enum StoreOrderStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  CANCELLED
+}
+
+model SisyaStoreOrder {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  ownerType  OwnerType
+  ownerId    Int
+  totalCoins Decimal
+
+  status StoreOrderStatus @default(PENDING)
+
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+
+  items SisyaStoreOrderItem[]
+}
+
+model SisyaStoreOrderItem {
+  id String @id @default(cuid())
+
+  orderId String
+  order   SisyaStoreOrder @relation(fields: [orderId], references: [id])
+
+  itemId String
+  item   SisyaStoreItem @relation(fields: [itemId], references: [id])
+
+  quantity        Int     @default(1)
+  priceAtPurchase Decimal
+  metadata        Json?
+}
+
+model SisyaRewardLimit {
+  id   String    @id @default(cuid())
+  role OwnerType
+
+  dailyLimit   Decimal
+  monthlyLimit Decimal?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([role])
+}
+
+model SisyaRewardLimitUser {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  dailyLimit   Decimal
+  monthlyLimit Decimal?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([walletId])
+}
+
+model SisyaRewardUsage {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  date           DateTime
+  amountRewarded Decimal  @default("0")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([walletId, date])
+}

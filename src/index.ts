@@ -9,7 +9,7 @@ import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, up
 import { authenticateTokenUser, downlinkMessage, getRedisContents, prisma, SECRET, sendMsgx, uploadImage } from './misc';
 import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2 } from './mentor';
 import { GetCoursesByGrade, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
-import { GetUsersByBigCourse, InsertLessons, UpdateLessons } from './lessons';
+import { GetUsersByBigCourse, GetUsersByBigCourse2, InsertLessons, UpdateLessons } from './lessons';
 import { GetTeacherAssignments, GetUserAssingments, InsertAssignmentWithFiles, InsertSubmission, UpdateAssignment, GetMySubmissions, InsertSubmissionWithFiles } from './assignments';
 import { logMessageServer } from "./consts";
 import { adminLogin, adminLoginUpdate, GetStudent } from './adminFuncs';
@@ -75,7 +75,7 @@ import cors from "cors";
 // import './jobs/dailyAnalytics'
 import './jobs/scheduledNotifCron'
 import './jobs/courseRatingUpdate'
-import { createAiReview, getAllAiReview } from './aiReview';
+import { createAiReview, getAllAiReview, getAllAiReview2, toggleAiReviewVisibility } from './aiReview';
 import upload from './middlewares/multer';
 import { AccessRequestReview, AdminAuditLogs, ApproverAssign, ContentPreview, ContentRequestAccess, ContentReview, ContentUpload } from './content';
 import { authAdmin, authAdminOrMentor, authAnyone, authMentor, authUser } from './middlewares/auth';
@@ -339,6 +339,7 @@ app.post("/admin/list_salesmen", authAdmin, ListSalesmen)
 app.post("/admin/send_notif", authAdmin, PassMultiNotifcation)
 app.post("/admin/add_ptm", authAdmin, InsertPtm)
 app.post("/admin/get_users_per_course", authAdmin, GetUsersByBigCourse)
+app.post("/admin/get_users_per_course2", authAdmin, GetUsersByBigCourse2)
 app.post("/admin/send_notif2", InterceptAndPass)
 app.post("/admin/get_scheduled_notifs", authAdmin, getScheduledNotifs)
 app.post("/admin/cancel_scheduled_notifs", authAdmin, cancelScheduledNotifs)
@@ -384,6 +385,7 @@ app.post('/admin/get_session_analytics3', authAdmin, getAllAnalyticsData3);
 app.post("/admin/get_subject_by_id", authAdmin, GetSubjectById)
 app.post("/admin/get_all_boards", authAdmin, GetAllBoards)
 app.post("/admin/create_big_course_subscription", authAdmin, createMgSubscription)
+app.post("/admin/get_conversation", authAdmin, GetConversationn)
 app.post("/admin/get_mg_subs", authAdmin, getMgSubscriptionsByUserId2)
 app.post("/admin/get_subjects_by_grade", authAdmin, GetSubjectByGrade)
 app.post("/admin/create_open_session", authAdmin, createOpenSession)
@@ -549,6 +551,8 @@ app.post('/submit_feedback', authUser, submitFeedback);
 app.post('/get_course_feedback', authUser, authUser, getCourseFeedback);
 app.post('/create_ai_review', authUser, createAiReview)
 app.post('/get_ai_review', getAllAiReview)
+app.post('/get_ai_review2', getAllAiReview2)
+app.post('/toogle_review_visiblity', toggleAiReviewVisibility)
 app.post("/get_banner_list", authUser, getFreeBannerList)
 app.post("/get_student_course_attendence_record", authUser, getStudentAttendanceRecords)
 app.post("/get_my_vm_ip",GetVMIP);
