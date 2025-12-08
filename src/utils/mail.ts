@@ -27,11 +27,11 @@ export const sendAnalyticsMail = async ({
     console.log("Message sent: %s", info.messageId);
 };
 
-export async function sendMail(to: string, subject: string, text: string) {
+export async function sendMail(to: string, subject: string, html: string) {
     await transporter.sendMail({
         from: `<${process.env.MAIL_USER}>`,
         to,
         subject,
-        text,
+        html,
     });
 }

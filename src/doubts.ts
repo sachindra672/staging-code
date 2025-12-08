@@ -93,7 +93,7 @@ function doubtCreatedEmailTemplate(teacherName: string, subject: string, topic: 
                 </div>
 
                 <div style="text-align:center; margin-top:25px;">
-                    <a href="https://teacher.sisya.in/doubt/${doubtId}"
+                    <a href="https://doubt-dashboard.vercel.app/"
                        style="background:#1a73e8; color:white; padding:12px 22px; border-radius:6px; text-decoration:none; font-size:15px;">
                         View Doubt
                     </a>
@@ -151,33 +151,27 @@ export async function insertDoubt2(req: Request, res: Response) {
             });
         }
 
-        const teacherList = (await prisma.subjectRecord.findMany({
-            where: { id: subjectRecord.subjectId, mentorId: { not: null } },
-            include: { mentor: true }
-        })).map(e => e.mentor);
+        const mentor = await prisma.mentor.findUnique({
+            where: { id: mentorId }
+        });
 
+        if (mentor && mentor.email) {
+            const html = doubtCreatedEmailTemplate(
+                mentor.name,
+                subject,
+                topic,
+                description,
+                doubt.id
+            );
 
-        if (teacherList.length > 0) {
-            for (const teacher of teacherList) {
-                if (teacher.email) {
-                    const html = doubtCreatedEmailTemplate(
-                        teacher.name,
-                        subject,
-                        topic,
-                        description,
-                        doubt.id
-                    );
-
-                    await sendMail(
-                        teacher.email,
-                        `New Student Doubt Assigned - ${subject}`,
-                        html
-                    );
-                }
-            }
+            await sendMail(
+                mentor.email,
+                `New Student Doubt Assigned - ${subject}`,
+                html
+            );
         }
 
-        res.status(201).json({ success: true, doubt, teacherList });
+        res.status(201).json({ success: true, doubt });
 
     } catch (error) {
         console.error('Error in insertDoubt:', error);

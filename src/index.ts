@@ -15,7 +15,7 @@ import { logMessageServer } from "./consts";
 import { adminLogin, adminLoginUpdate, GetStudent } from './adminFuncs';
 import { getChatHistoryParticipants, GetConversationn, GetMessages, getMessagesByUUID, GetMyUUID, insertMessage, MarkMessageIDsRead } from './messageStore';
 import { CreatePurchase, GetMyPurchases } from './purchases';
-import { AssignMentor, GetAllDoubts, getAssignedDoubts, getAssignedDoubtsList, getDoubtFiles, getMyDoubts, insertDoubt, insertDoubtResponse, updateDoubt, updateDoubtResponse } from './doubts';
+import { AssignMentor, GetAllDoubts, getAssignedDoubts, getAssignedDoubtsList, getDoubtFiles, getMyDoubts, insertDoubt, insertDoubt2, insertDoubtResponse, updateDoubt, updateDoubtResponse } from './doubts';
 import { UploadAssignments, UploadCourseMaterials } from "./uploads"
 import { DeleteCourse, DeleteSchedules, GetLtCourseCatalog, GetLtCourseCatalogBySubject, InsertLtCourse, InsertSchedule } from './ltCourse';
 import { GetOfferByCourse, InsertOffer } from './offers';
@@ -82,7 +82,7 @@ import { authAdmin, authAdminOrMentor, authAnyone, authMentor, authUser } from '
 import { createWorkers } from './mediasoup/createWorkers';
 // import { classroomSocketHandler } from './sockets/classroom';
 import { openSessionSocketHandler } from './sockets/openSession';
-import { bookSession, createOpenSession, deleteOpenSession, getOpenSessionById, getOpenSessions, startOpenSession, updateOpenSession } from './openSessionController';
+import { bookSession, createOpenSession, deleteOpenSession, endOpenSession, getOpenSessionById, getOpenSessions, startOpenSession, updateOpenSession } from './openSessionController';
 import { pdfHandler } from './pdfHandler';
 import { uploadSingle } from './middlewares/multerMiddleware';
 import { getClassCardWeb, updateClassCardWeb, uploadClassCardWeb } from './classCardWeb';
@@ -447,7 +447,7 @@ app.post("/get_courses", authUser, GetCoursesByGrade)
 //app.post("/get_course_detail", GetCourseDetail)
 app.post("/get_my_purchases", authUser, GetMyPurchases)
 app.post("/get_my_doubts", authUser, getMyDoubts)
-app.post("/create_doubt", authUser, insertDoubt)
+app.post("/create_doubt", authUser, insertDoubt2)
 app.post("/assign_mentor_doubt", authUser, AssignMentor)
 app.patch("/update_doubt", authUser, updateDoubt)
 app.post("/get_messages", authUser, GetMessages)
@@ -562,6 +562,7 @@ app.post("/get_open_session2", authAnyone, getOpenSessions);
 app.post("/get_open_session_id2", authAnyone, getOpenSessionById);
 app.post("/book_open_session", authUser, bookSession);
 app.post("/start_open_session",startOpenSession);
+app.post("/end_open_session",endOpenSession);
 app.post('/get_attendance_detail', authUser, getStudentCourseAttendance);
 app.post("/get_all_courses", GetMentorCourses)
 app.post("/get_course", GetAllCourses) //for website no auth

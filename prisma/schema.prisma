@@ -1877,6 +1877,7 @@ enum OwnerType {
   SUBADMIN
   SYSTEM // TODO- run script, first baar for creating system wallet
 }
+// already created user wallet creation scripts
 
 model SisyaWallet {
   id        String    @id @default(cuid())

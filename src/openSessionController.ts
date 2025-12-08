@@ -1,6 +1,6 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
-import { createClassVM } from './vm_management/vm';
+import { createClassVM, deleteClassVM } from './vm_management/vm';
 
 export const createOpenSession = async (req: Request, res: Response) => {
     try {
@@ -306,6 +306,56 @@ export const bookSession = async (req: Request, res: Response) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const endOpenSession = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.body;
+
+        if (!id || typeof id !== "number") {
+            return res.status(400).json({ error: "Valid numeric session id is required" });
+        }
+
+        // Check session exists
+        const existingSession = await prisma.openSession.findUnique({
+            where: { id },
+            select: { id: true, randomNumber: true },
+        });
+
+        if (!existingSession) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+
+        // Update session to not going on
+        const session = await prisma.openSession.update({
+            where: { id },
+            data: {
+                isGoingOn: false,
+                isDone:true,
+            },
+        });
+
+        // Trigger VM deletion async
+        if (existingSession.randomNumber) {
+            deleteClassVM(`${id}`).catch((err: any) => {
+                console.error(`VM delete failed for session ${id}:`, err);
+            });
+        }
+
+        return res.status(200).json({
+            message: "Session ended successfully",
+            session,
+        });
+    } catch (err: any) {
+        console.error("Error ending open session:", err);
+
+        if (err.code === "P2025") {
+            return res.status(404).json({ error: "Session not found" });
+        }
+
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 
 
 
