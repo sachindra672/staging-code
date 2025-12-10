@@ -5,7 +5,7 @@ import { Request, Response } from "express";
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import * as jwt from 'jsonwebtoken';
 
-import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId } from './UserFuncs';
+import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2 } from './UserFuncs';
 import { authenticateTokenUser, downlinkMessage, getRedisContents, prisma, SECRET, sendMsgx, uploadImage } from './misc';
 import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2 } from './mentor';
 import { GetCoursesByGrade, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
@@ -13,6 +13,58 @@ import { GetUsersByBigCourse, GetUsersByBigCourse2, InsertLessons, UpdateLessons
 import { GetTeacherAssignments, GetUserAssingments, InsertAssignmentWithFiles, InsertSubmission, UpdateAssignment, GetMySubmissions, InsertSubmissionWithFiles } from './assignments';
 import { logMessageServer } from "./consts";
 import { adminLogin, adminLoginUpdate, GetStudent } from './adminFuncs';
+import {
+  getMyWallet,
+  getWalletByOwner,
+  getAllWallets,
+} from './sisyacoin/walletController';
+import {
+  mintCoins,
+  burnCoins,
+  createRate,
+  getRates,
+  updateRate,
+  setRoleRewardLimit,
+  getRoleRewardLimits,
+} from './sisyacoin/adminCoinController';
+import {
+  allocateRewardBudget,
+  adjustRewardBudget,
+  getRewardBudget,
+  setUserRewardLimit,
+  getUserRewardLimits,
+} from './sisyacoin/rewardBudgetController';
+import {
+  grantManualReward,
+  getRewardsGiven,
+  getRewardsReceived,
+} from './sisyacoin/manualRewardController';
+import {
+  grantTaskReward,
+  getMyTaskRewards,
+  checkTaskReward,
+  getAllTaskRewards,
+} from './sisyacoin/taskRewardController';
+import {
+  getMyTransactions,
+  getTransactionById,
+  getWalletTransactions,
+} from './sisyacoin/transactionController';
+import {
+  getStoreItems,
+  createStoreItem,
+  updateStoreItem,
+  createOrder as createStoreOrder,
+  getMyOrders,
+  getOrderById,
+  refundOrder,
+} from './sisyacoin/storeController';
+import {
+  initiateFiatPurchase,
+  handlePaymentWebhook,
+  getMyFiatPurchases,
+  getAllFiatPurchases,
+} from './sisyacoin/fiatPurchaseController';
 import { getChatHistoryParticipants, GetConversationn, GetMessages, getMessagesByUUID, GetMyUUID, insertMessage, MarkMessageIDsRead } from './messageStore';
 import { CreatePurchase, GetMyPurchases } from './purchases';
 import { AssignMentor, GetAllDoubts, getAssignedDoubts, getAssignedDoubtsList, getDoubtFiles, getMyDoubts, insertDoubt, insertDoubt2, insertDoubtResponse, updateDoubt, updateDoubtResponse } from './doubts';
@@ -31,8 +83,8 @@ import { GetMentor, GetMentorCourses, GetMentorRatings, InsertMentorRating } fro
 import { deleteSession, EditSession, EditSession2, GetSessionsByBigCourse, getStreamInfo, GetVMIP, InsertNewSession, InsertNewSessionStream, InsertNewSessionStream2, recordingUploadedWebhook } from './sessions';
 import { GetMultipleStudentInfo, GetMyBigCourseStudents, getStudentByGrade } from './getMyStudents';
 import { getStudentAttendanceRecords, getStudentListBySession, insertAttendanceRecord, RecordAttendanceExitTime } from './attendanceRecords';
-import { InsertSessionTestQuestions, InsertSessionTests } from './sessionTests';
-import { createSessionTestSubmission, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission } from './sessionTestSubmission';
+import { InsertSessionTestQuestions, InsertSessionTests, InsertSessionTests2 } from './sessionTests';
+import { createSessionTestSubmission, createSessionTestSubmission2, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission } from './sessionTestSubmission';
 import { GetMyAttendanceProgressReport, sessionAttendanceList } from './studentProgressReport';
 import { AddMentor, createBigCourse, updateBigCourse } from './admin/adds';
 import { GetAllCourses, GetAllMentors, GetPagedStudentList } from './admin/gets.';
@@ -64,6 +116,7 @@ import { genUserToken } from './userGenToken';
 import { abortS3upload, completeS3upload, getS3uploadUrl, initS3upload } from './awsUploadRecording';
 import { getSignedUrlAws, getSignedUrlGcp, updateRecordingUrl } from './recordings';
 import { addQuizWithQuestions, quizQuestionResponse } from './quiz';
+import { getAllQuizzes, getQuizWithStats, createQuiz, submitQuizResponse, endQuiz } from './sisyaQuiz';
 import { addGroupMemberEndpoint, createGroupEndpoint, deleteMessage, getAllGroupsAdmin, getGroupMessages, getMentorGroups, getNameByType, getReadReciept, getRecentMessagesGroup, getStudentGroups, markReadGroupMessage, sendGroupMessage, updateGroupType } from './courseGroupChat';
 import { addSessionAnalytics, getAllAnalyticsData, getAllAnalyticsData2, getAllAnalyticsData3, getCourseFeedback, getFeedbackStatus, getStudentCourseAttendance, postStudentDailyAnalytics, submitFeedback, testMail } from './sessionAnalytics';
 
@@ -221,6 +274,7 @@ app.post("/teacher/get_multiple_student_info", authMentor, GetMultipleStudentInf
 app.post("/teacher/get_student_course_attendence_record", authMentor, getStudentAttendanceRecords)
 app.post("/teacher/get_session_attendance_student_list", authMentor, getStudentListBySession)
 app.post("/teacher/add_session_test", authMentor, InsertSessionTests)
+app.post("/teacher/add_session_test2", authMentor, InsertSessionTests2)
 app.post("/teacher/update_mentor", authMentor, updateMentor)
 app.post("/teacher/add_session_test_question", authMentor, InsertSessionTestQuestions)
 app.post("/teacher/get_studentlist_session_test", authMentor, getStudentListSessionTestSubmission)
@@ -229,7 +283,7 @@ app.post("/teacher/start_session", authMentor, InsertNewSessionStream)
 app.post("/teacher/start_session2", authMentor, InsertNewSessionStream2)
 app.post("/teacher/get_ctests", authMentor, GetCtests)
 app.post("/teacher/get_qtests", authMentor, Getqtests)
-app.post("/teacher/update_device_id",authMentor, updateMentorDeviceId);
+app.post("/teacher/update_device_id", authMentor, updateMentorDeviceId);
 app.post("/teacher/get_assigned_doubts_users", authMentor, getAssignedDoubts)
 app.post("/teacher/sales/my_leads", MyLeads)//sales auth
 app.post("/teacher/sales/add_lead", InsertLead) //sales auth
@@ -266,6 +320,11 @@ app.post("/teacher/get-signed-url", authMentor, getSignedUrlGcp)
 app.post("/teacher/update_recording", authMentor, updateRecordingUrl)
 app.post("/teacher/quiz_with_questions", authMentor, addQuizWithQuestions)
 app.post("/teacher/quiz_question_response", authMentor, quizQuestionResponse)
+// SisyaClassQuiz routes
+app.post("/teacher/get_all_quizzes", authMentor, getAllQuizzes)
+app.get("/teacher/quiz/:quizId/stats", authMentor, getQuizWithStats)
+app.post("/teacher/create_quiz", authMentor, createQuiz)
+app.post("/teacher/end_quiz", authMentor, endQuiz)
 app.get('/teacher/groups/:mentorId', authMentor, getMentorGroups)
 app.post('/teacher/add_session_analytics', authMentor, addSessionAnalytics);
 app.post("/teacher/get_bg_course_by_id", authMentor, GetBigCoursesById)
@@ -429,6 +488,7 @@ app.use("/leads", authAdmin, leadsRouter)
 // unclassfied routes ( mostly user though )
 app.post("/user", createUser);
 app.patch("/user", updateUser);
+app.patch("/user2", updateUser2);
 app.delete("/user", authUser, SoftDeleteUser);
 app.post("/find_user", authUser, findUser)
 app.post("/find_user_web", findUser) // website no auth
@@ -453,6 +513,8 @@ app.patch("/update_doubt", authUser, updateDoubt)
 app.post("/get_messages", authUser, GetMessages)
 app.post("/mark_message_read", authUser, MarkMessageIDsRead)
 app.post("/submit_assignment", authUser, InsertSubmission)
+app.post("/get_all_quizzes", authUser, getAllQuizzes)
+app.post("/submit_quiz_response", authUser, submitQuizResponse)
 app.get("/otps", getRedisContents) // --------------- remove in prod ----------------------------
 app.post("/create_purchase", authUser, CreatePurchase)
 app.post("/get_mentor_by_class", authUser, GetMentorsByClasses)
@@ -483,6 +545,7 @@ app.post("/get_bg_course_info", authUser, GetBigCourses)
 app.post("/get_bg_course_info2", authUser, GetBigCourses2)
 app.post("/get_mentor_by_id", authUser, GetMentor)
 app.post("/submit_session_test", authUser, createSessionTestSubmission)
+app.post("/submit_session_test2", authUser, createSessionTestSubmission2)
 app.post("/get_session_test_responses", authUser, GetSessionTestSubmissions)
 app.post("/create_big_course_subscription", authUser, createMgSubscription)//--------------------------------
 app.post("/create_big_course_subscription", createMgSubscription) // website no auth
@@ -555,14 +618,14 @@ app.post('/get_ai_review2', getAllAiReview2)
 app.post('/toogle_review_visiblity', toggleAiReviewVisibility)
 app.post("/get_banner_list", authUser, getFreeBannerList)
 app.post("/get_student_course_attendence_record", authUser, getStudentAttendanceRecords)
-app.post("/get_my_vm_ip",GetVMIP);
+app.post("/get_my_vm_ip", GetVMIP);
 app.post("/recording-uploaded", recordingUploadedWebhook);
 app.post("/apn_token_update", UpdateApnToken);
 app.post("/get_open_session2", authAnyone, getOpenSessions);
 app.post("/get_open_session_id2", authAnyone, getOpenSessionById);
 app.post("/book_open_session", authUser, bookSession);
-app.post("/start_open_session",startOpenSession);
-app.post("/end_open_session",endOpenSession);
+app.post("/start_open_session", startOpenSession);
+app.post("/end_open_session", endOpenSession);
 app.post('/get_attendance_detail', authUser, getStudentCourseAttendance);
 app.post("/get_all_courses", GetMentorCourses)
 app.post("/get_course", GetAllCourses) //for website no auth
@@ -680,6 +743,61 @@ app.get("/classroom/:sessionId/peers", getPeersInSession);
 app.post("/get_all_subjects_data", GetAllSubjectData)
 app.get("/public_course_list", GetLongTermCoursesPublicList)
 
+// ---- SisyaCoin endpoints (direct) ----
+// Wallets
+app.post("/wallet/me", authAnyone, getMyWallet);
+app.get("/admin/sisyacoin/wallets/:ownerType/:ownerId", authAdmin, getWalletByOwner);
+app.get("/admin/sisyacoin/wallets", authAdmin, getAllWallets);
+
+// Admin coin ops & rates
+app.post("/admin/sisyacoin/coins/mint", authAdmin, mintCoins);
+app.post("/admin/sisyacoin/coins/burn", authAdmin, burnCoins);
+app.post("/admin/sisyacoin/rates", authAdmin, createRate);
+app.get("/admin/sisyacoin/rates", authAdmin, getRates);
+app.put("/admin/sisyacoin/rates/:id", authAdmin, updateRate);
+
+// Reward limits (role-level)
+app.put("/admin/sisyacoin/reward-limits/role/:ownerType", authAdmin, setRoleRewardLimit);
+app.get("/admin/sisyacoin/reward-limits/roles", authAdmin, getRoleRewardLimits);
+
+// Reward budgets & user-level limits
+app.post("/admin/sisyacoin/reward-budgets/allocate", authAdmin, allocateRewardBudget);
+app.post("/admin/sisyacoin/reward-budgets/adjust", authAdmin, adjustRewardBudget);
+app.get("/admin/sisyacoin/reward-budgets/:ownerType/:ownerId", authAdmin, getRewardBudget);
+app.put("/admin/sisyacoin/reward-limits/users/:walletId", authAdmin, setUserRewardLimit);
+app.get("/admin/sisyacoin/reward-limits/users", authAdmin, getUserRewardLimits);
+
+// Manual rewards
+app.post("/sisyacoin/rewards/manual", authMentor, grantManualReward);
+app.get("/sisyacoin/rewards/manual/given", authMentor, getRewardsGiven);
+app.get("/sisyacoin/rewards/manual/received", authUser, getRewardsReceived);
+
+// Task rewards (automatic rewards for homework, tests, etc.)
+app.post("/sisyacoin/rewards/task", grantTaskReward); // No auth - called internally by system
+app.get("/sisyacoin/rewards/task/me", authUser, getMyTaskRewards);
+app.get("/sisyacoin/rewards/task/check", checkTaskReward); // Check if task already rewarded
+app.get("/admin/sisyacoin/rewards/task", authAdmin, getAllTaskRewards);
+
+// Transactions
+app.get("/sisyacoin/transactions/me", authAnyone, getMyTransactions);
+app.get("/sisyacoin/transactions/:id", authAnyone, getTransactionById);
+app.get("/sisyacoin/admin/wallets/:walletId/transactions", authAdmin, getWalletTransactions);
+
+// Store
+app.get("/sisyacoin/store/items", authAnyone, getStoreItems);
+app.post("/admin/sisyacoin/store/items", authAdmin, createStoreItem);
+app.put("/admin/sisyacoin/store/items/:id", authAdmin, updateStoreItem);
+app.post("/sisyacoin/store/orders", authUser, createStoreOrder);
+app.get("/sisyacoin/store/orders/me", authUser, getMyOrders);
+app.get("/sisyacoin/store/orders/:id", authAnyone, getOrderById);
+app.post("/admin/sisyacoin/store/orders/:id/refund", authAdmin, refundOrder);
+
+// Fiat purchases
+app.post("/sisyacoin/fiat-purchases", authUser, initiateFiatPurchase);
+app.post("/sisyacoin/fiat-purchases/provider/webhook", handlePaymentWebhook); // provider callback
+app.get("/sisyacoin/fiat-purchases/me", authUser, getMyFiatPurchases);
+app.get("/admin/sisyacoin/fiat-purchases", authAdmin, getAllFiatPurchases);
+
 app.get("/info", function (_: Request, res: Response) {
   res.send(process.version)
 })
@@ -791,7 +909,7 @@ openSessionNamespace.on("connection", (socket: CustomSocket) => {
 io.on('connection', (socket: CustomSocket) => {
   SocketToUserIdMap.set(socket.user.id, socket.id)
 
-//  classroomSocketHandler(io, socket, workers);
+  //  classroomSocketHandler(io, socket, workers);
   videocallSocketHandlerNew(io, socket, workers);
 
   socket.on("set:role:teacher", () => {
@@ -802,7 +920,7 @@ io.on('connection', (socket: CustomSocket) => {
   // 🧹 CRITICAL FIX: Cleanup socket map on disconnect
   socket.on('disconnect', () => {
     SocketToUserIdMap.delete(socket.user.id);
-    
+
     const entry = [...onlineUsers.entries()].find(([_, value]) => value.socketId === socket.id);
 
     if (entry) {
@@ -1081,7 +1199,7 @@ function GetOnlineTeachers() {
       tList.push(socket.user.id)
     }
   })
-  console.log({"tList":tList});
+  console.log({ "tList": tList });
   return tList
 }
 
@@ -1110,6 +1228,7 @@ export async function GetOnlineTeachers2() {
 async function GetOnlineTeachersList(_: Request, res: Response) {
   res.json({ success: true, tlist: GetOnlineTeachers() })
 }
+
 server.listen(4000, '0.0.0.0', () => { console.log(logMessageServer) });
 
 process.on('SIGINT', () => {

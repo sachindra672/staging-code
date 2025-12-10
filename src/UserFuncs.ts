@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { generateAccessTokenUser, hashPassword, redis, sendOtp, prisma, sendOtpReg, verifyPassword, UserRole, uploadImage, } from './misc';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { ensureWallet } from './config/sisyacoinHelperFunctions';
 
 
 interface UpdateUserBody {
@@ -158,12 +159,12 @@ export async function MentorLogin(req: Request, res: Response) {
 }
 
 export async function updateMentorDeviceId(req: Request, res: Response) {
-    const { id,notificationToken } = req.body;
+    const { id, notificationToken } = req.body;
 
     if (!id) return res.status(400).json({ success: false, message: 'Phone and password are required' });
 
     try {
-        await prisma.mentor.update({ where: { id },data:{deviceId:notificationToken} });
+        await prisma.mentor.update({ where: { id }, data: { deviceId: notificationToken } });
 
         res.status(200).json({ success: true, message: 'updated the teacher device Id' });
     } catch (error) {
@@ -268,6 +269,58 @@ export async function updateUser(req: Request, res: Response) {
 
 
         uploadImage(imageData, updatedUser.id, "users")
+
+        res.json({ success: true, updatedUser });
+    } catch (error: unknown) {
+        console.error('Error updating user:', error);
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === 'P2001') {  // Prisma error code for 'record not found'
+                return res.status(404).json({ success: false, message: 'User not found' });
+            }
+        }
+
+        return res.status(500).json({ success: false, message: 'Internal Server Error', details: error instanceof Error ? error.message : 'Unknown error' });
+    }
+}
+
+export async function updateUser2(req: Request, res: Response) {
+    try {
+        const { id, name, email, address, phone, grade, imageData, educationBoardId } = req.body as UpdateUserBody;
+
+        // Null checks for required fields
+        if (!id || id === 0) {
+            return res.status(400).json({ success: false, message: "ID field is required and must be greater than 0" });
+        }
+
+        if (typeof id !== 'number') {
+            return res.status(400).json({ success: false, message: "ID must be a number" });
+        }
+
+        // Check for at least one field to update
+        if (!name && !email && !address && !phone && !grade && !imageData && !educationBoardId) {
+            return res.status(400).json({ success: false, message: "At least one field must be provided to update" });
+        }
+
+        const updatedUser = await prisma.endUsers.update({
+            where: { id },
+            data: { name, email, address, phone, grade, educationBoardId },
+            select: { id: true, name: true, email: true, address: true, phone: true, grade: true },
+        });
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        uploadImage(imageData, updatedUser.id, "users")
+
+        // Ensure wallet exists for the user
+        try {
+            await ensureWallet("ENDUSER", updatedUser.id);
+        } catch (walletError) {
+            console.error("Error creating wallet for user:", walletError);
+            // Continue even if wallet creation fails - wallet can be created later
+        }
 
         res.json({ success: true, updatedUser });
     } catch (error: unknown) {

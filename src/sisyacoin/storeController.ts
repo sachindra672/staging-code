@@ -119,7 +119,7 @@ export async function createOrder(req: Request, res: Response) {
             });
         }
 
-        const user = req.user;
+        const { userId } = req.body;
         const role = req.role;
 
         if (role !== "user") {
@@ -129,10 +129,8 @@ export async function createOrder(req: Request, res: Response) {
             });
         }
 
-        // Get user ID and wallet
-        const userId = user?.user || user?.id || user?.selfId;
         if (!userId) {
-            return res.status(400).json({ success: false, message: "User ID not found" });
+            return res.status(400).json({ success: false, message: "userId is required in request body" });
         }
 
         const endUser = await prisma.endUsers.findFirst({
@@ -296,7 +294,7 @@ export async function createOrder(req: Request, res: Response) {
 export async function getMyOrders(req: Request, res: Response) {
     try {
         const { page = 1, limit = 50 } = req.query;
-        const user = req.user;
+        const { userId } = req.query;
         const role = req.role;
 
         if (role !== "user") {
@@ -306,15 +304,14 @@ export async function getMyOrders(req: Request, res: Response) {
             });
         }
 
-        const userId = user?.user || user?.id || user?.selfId;
         if (!userId) {
-            return res.status(400).json({ success: false, message: "User ID not found" });
+            return res.status(400).json({ success: false, message: "userId is required in query params" });
         }
 
         const endUser = await prisma.endUsers.findFirst({
             where: {
                 OR: [
-                    { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
+                    { id: typeof userId === 'number' ? userId : parseInt(userId as string) || 0 },
                     { phone: typeof userId === 'string' ? userId : String(userId) }
                 ]
             },
@@ -440,8 +437,10 @@ export async function refundOrder(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Only completed orders can be refunded" });
         }
 
-        const adminUser = req.user;
-        const adminId = adminUser?.user || adminUser?.id || adminUser?.selfId;
+        const { adminId } = req.body;
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
 
         // Refund coins to wallet
         const balanceBefore = order.wallet.spendableBalance;

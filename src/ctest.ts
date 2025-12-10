@@ -3,6 +3,9 @@ import { Request, Response } from 'express'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { Storage } from "@google-cloud/storage";
 import { nanoid } from "nanoid";
+import { grantTaskReward } from './sisyacoin/taskRewardController'
+import { getSystemWallet } from './config/sisyacoinHelperFunctions'
+import { Decimal } from "@prisma/client/runtime/library";
 
 const storage = new Storage({
     projectId: process.env.GCP_PROJECT_ID,
@@ -509,34 +512,189 @@ export async function createCtestSubmission2(req: Request, res: Response) {
     try {
         const { ctestId, endUsersId, responses } = req.body;
 
-        if (!ctestId || !endUsersId) {
-            return res.status(400).json({ error: 'Missing ids' });
+        if (typeof ctestId !== 'number' || ctestId <= 0) {
+            return res.status(400).json({ error: 'Invalid or missing ctestId' });
         }
 
-        const submission = await prisma.ctestSubmission.create({
-            data: { ctestId, endUsersId },
+        if (typeof endUsersId !== 'number' || endUsersId <= 0) {
+            return res.status(400).json({ error: 'Invalid or missing endUsersId' });
+        }
+
+        if (!Array.isArray(responses) || responses.length === 0) {
+            return res.status(400).json({ error: 'Invalid or missing responses' });
+        }
+
+        for (const response of responses) {
+            if (typeof response.response !== 'number' ||
+                typeof response.ctestQuestionsId !== 'number' ||
+                response.response <= 0 ||
+                response.ctestQuestionsId <= 0) {
+                return res.status(400).json({ error: 'Invalid response format in responses' });
+            }
+        }
+
+        // Get ctest with questions to calculate score
+        const ctest = await prisma.ctest.findUnique({
+            where: { id: ctestId },
+            include: {
+                ctestQuestions: true,
+            },
         });
 
-        const promises = responses.map((r) =>
+        if (!ctest) {
+            return res.status(404).json({ error: 'CTest not found' });
+        }
+
+        // Create submission
+        const newSubmission = await prisma.ctestSubmission.create({
+            data: {
+                ctestId: ctestId,
+                endUsersId: endUsersId,
+            },
+        });
+
+        // Create response records
+        const responsePromises = responses.map((response) =>
             prisma.cTestResponse.create({
                 data: {
-                    response: r.response ?? null,
-                    subjectiveAnswer: r.subjectiveAnswer ?? null,
-                    attachments: r.attachments ?? [],
-                    endUsersId,
-                    ctestQuestionsId: r.ctestQuestionsId,
-                    ctestId,
-                    ctestSubmissionId: submission.id,
+                    response: response.response,
+                    endUsersId: endUsersId,
+                    ctestQuestionsId: response.ctestQuestionsId,
+                    ctestId: ctestId,
+                    ctestSubmissionId: newSubmission.id,
                 },
             })
         );
 
-        await Promise.all(promises);
+        await Promise.all(responsePromises);
 
-        res.status(201).json({ success: true, submission });
+        // Calculate score and percentage
+        const totalQuestions = ctest.ctestQuestions.length;
+        let correctAnswers = 0;
 
+        // Create a map of question ID to correct response for quick lookup
+        const questionMap = new Map<number, number>();
+        ctest.ctestQuestions.forEach((q) => {
+            questionMap.set(q.id, q.correctResponse);
+        });
+
+        // Count correct answers
+        responses.forEach((response) => {
+            const correctResponse = questionMap.get(response.ctestQuestionsId);
+            if (correctResponse && response.response === correctResponse) {
+                correctAnswers++;
+            }
+        });
+
+        const percentage = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+
+        // Grant reward: base 20 coins + 1 coin per correct answer
+        let rewardInfo: any = null;
+
+        try {
+            const baseReward = 20;
+            const correctAnswerBonus = correctAnswers; // 1 coin per correct answer
+            const coinsAmount = baseReward + correctAnswerBonus;
+
+            const taskCode = `CTEST_${ctestId}_${endUsersId}`;
+            const amountDecimal = new Decimal(coinsAmount);
+            const reason = `CTest completion - Base reward: ${baseReward} coins, Correct answer bonus: ${correctAnswerBonus} coins (${correctAnswers}/${totalQuestions} correct)`;
+
+            // Check system wallet balance
+            const systemWallet = await getSystemWallet();
+            if (systemWallet.spendableBalance.lt(amountDecimal)) {
+                console.warn(
+                    `System wallet has insufficient balance for ctest reward. Available: ${systemWallet.spendableBalance}, Required: ${coinsAmount}`
+                );
+                rewardInfo = {
+                    coinsEarned: 0,
+                    message: "System wallet has insufficient balance",
+                    breakdown: {
+                        base: baseReward,
+                        correctAnswerBonus: correctAnswerBonus,
+                        total: coinsAmount,
+                    },
+                    score: `${correctAnswers}/${totalQuestions}`,
+                    percentage: percentage.toFixed(2),
+                };
+            } else {
+                const rewardReq = {
+                    body: {
+                        userId: endUsersId,
+                        taskCode: taskCode,
+                        coinsAmount: coinsAmount,
+                        reason: reason,
+                        metadata: {
+                            ctestId: ctestId,
+                            ctestTitle: ctest.title,
+                            correctAnswers: correctAnswers,
+                            totalQuestions: totalQuestions,
+                            percentage: percentage,
+                        },
+                    },
+                } as Request;
+
+                let rewardResponseData: any = null;
+                const rewardRes = {
+                    json: (data: any) => {
+                        rewardResponseData = data;
+                    },
+                    status: (_code: number) => ({
+                        json: (data: any) => {
+                            rewardResponseData = data;
+                        },
+                    }),
+                } as unknown as Response;
+
+                await grantTaskReward(rewardReq, rewardRes);
+
+                if (rewardResponseData?.success) {
+                    rewardInfo = {
+                        coinsEarned: coinsAmount,
+                        message: `Base reward: ${baseReward} coins, Correct answer bonus: ${correctAnswerBonus} coins`,
+                        breakdown: {
+                            base: baseReward,
+                            correctAnswerBonus: correctAnswerBonus,
+                            total: coinsAmount,
+                        },
+                        score: `${correctAnswers}/${totalQuestions}`,
+                        percentage: percentage.toFixed(2),
+                        userWallet: rewardResponseData.data?.userWallet || null,
+                        reward: {
+                            reward: rewardResponseData.data?.reward || null,
+                            transactions: rewardResponseData.data?.transactions || null,
+                        },
+                    };
+                } else {
+                    rewardInfo = {
+                        coinsEarned: 0,
+                        message: "Reward grant failed",
+                        breakdown: {
+                            base: baseReward,
+                            correctAnswerBonus: correctAnswerBonus,
+                            total: coinsAmount,
+                        },
+                        score: `${correctAnswers}/${totalQuestions}`,
+                        percentage: percentage.toFixed(2),
+                    };
+                }
+            }
+        } catch (rewardError) {
+            console.error('Error in reward granting logic:', rewardError);
+            rewardInfo = {
+                coinsEarned: 0,
+                message: "Error processing reward",
+                error: rewardError instanceof Error ? rewardError.message : "Unknown error",
+            };
+        }
+
+        res.status(201).json({
+            success: true,
+            submission: newSubmission,
+            reward: rewardInfo,
+        });
     } catch (error) {
-        console.error('Error creating submission:', error);
+        console.error('Error creating ctest submission with responses:', error);
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 }

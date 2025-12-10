@@ -4,8 +4,6 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { applyTransaction, getSystemWallet } from "../config/sisyacoinHelperFunctions";
 
 // mint the coin into the system wallet 
-// {amount, reason}- take from body
-// admin details from the middleware
 export async function mintCoins(req: Request, res: Response) {
     try {
         const { amount, reason } = req.body;
@@ -14,8 +12,15 @@ export async function mintCoins(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Valid amount is required" });
         }
 
-        const adminUser = req.user;
-        const adminId = adminUser?.user?.id;
+        const { adminId } = req.body;
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
+
+        const adminIdNum = typeof adminId === 'number' ? adminId : parseInt(adminId);
+        if (isNaN(adminIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid adminId" });
+        }
 
         const systemWallet = await getSystemWallet();
         const amountDecimal = new Decimal(amount);
@@ -42,7 +47,7 @@ export async function mintCoins(req: Request, res: Response) {
             undefined,
             undefined,
             "ADMIN",
-            typeof adminId === 'number' ? adminId : parseInt(adminId) || undefined
+            adminIdNum
         );
 
         // add in audit log
@@ -51,7 +56,7 @@ export async function mintCoins(req: Request, res: Response) {
                 walletId: systemWallet.id,
                 action: "MINT_COINS",
                 actorType: "ADMIN",
-                actorId: typeof adminId === 'number' ? adminId : parseInt(adminId) || 0,
+                actorId: adminIdNum,
                 before: balanceBefore,
                 delta: amountDecimal,
                 after: balanceAfter,
@@ -83,8 +88,15 @@ export async function burnCoins(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Valid amount is required" });
         }
 
-        const adminUser = req.user;
-        const adminId = adminUser?.user?.id;
+        const { adminId } = req.body;
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
+
+        const adminIdNum = typeof adminId === 'number' ? adminId : parseInt(adminId);
+        if (isNaN(adminIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid adminId" });
+        }
 
         const systemWallet = await getSystemWallet();
         const amountDecimal = new Decimal(amount);
@@ -109,7 +121,7 @@ export async function burnCoins(req: Request, res: Response) {
         const transaction = await applyTransaction(
             systemWallet.id,
             "BURN",
-            amountDecimal.negated(), 
+            amountDecimal.negated(),
             "SPENDABLE",
             balanceBefore,
             balanceAfter,
@@ -117,7 +129,7 @@ export async function burnCoins(req: Request, res: Response) {
             undefined,
             undefined,
             "ADMIN",
-            typeof adminId === 'number' ? adminId : parseInt(adminId) || undefined
+            adminIdNum
         );
 
         // add in audit log
@@ -126,7 +138,7 @@ export async function burnCoins(req: Request, res: Response) {
                 walletId: systemWallet.id,
                 action: "BURN_COINS",
                 actorType: "ADMIN",
-                actorId: typeof adminId === 'number' ? adminId : parseInt(adminId) || 0,
+                actorId: adminIdNum,
                 before: balanceBefore,
                 delta: amountDecimal.negated(),
                 after: balanceAfter,
@@ -205,7 +217,7 @@ export async function getRates(req: Request, res: Response) {
 // update rate (deactivate ya fir modify)
 export async function updateRate(req: Request, res: Response) {
     try {
-        const { id,coinsPerUnit, offerPercent, effectiveTo, isActive } = req.body;
+        const { id, coinsPerUnit, offerPercent, effectiveTo, isActive } = req.body;
 
         const updateData: any = {};
         if (coinsPerUnit !== undefined) updateData.coinsPerUnit = new Decimal(coinsPerUnit);
@@ -228,7 +240,7 @@ export async function updateRate(req: Request, res: Response) {
 // particular role ke liye reward limit
 export async function setRoleRewardLimit(req: Request, res: Response) {
     try {
-        const { ownerType,dailyLimit, monthlyLimit, isActive } = req.body;
+        const { ownerType, dailyLimit, monthlyLimit, isActive } = req.body;
 
         if (!dailyLimit) {
             return res.status(400).json({ success: false, message: "dailyLimit is required" });

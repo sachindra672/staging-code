@@ -27,8 +27,15 @@ export async function allocateRewardBudget(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Amount must be positive" });
         }
 
-        const adminUser = req.user;
-        const adminId = adminUser?.user || adminUser?.id || adminUser?.selfId;
+        const { adminId } = req.body;
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
+
+        const adminIdNum = typeof adminId === 'number' ? adminId : parseInt(adminId);
+        if (isNaN(adminIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid adminId" });
+        }
 
         // Get system wallet
         const systemWallet = await getSystemWallet();
@@ -79,7 +86,7 @@ export async function allocateRewardBudget(req: Request, res: Response) {
             targetWallet.id,
             undefined,
             "ADMIN",
-            typeof adminId === 'number' ? adminId : parseInt(adminId) || undefined
+            adminIdNum
         );
 
         const targetTransaction = await applyTransaction(
@@ -93,7 +100,7 @@ export async function allocateRewardBudget(req: Request, res: Response) {
             systemWallet.id,
             undefined,
             "ADMIN",
-            typeof adminId === 'number' ? adminId : parseInt(adminId) || undefined
+            adminIdNum
         );
 
         // Create audit logs
@@ -103,7 +110,7 @@ export async function allocateRewardBudget(req: Request, res: Response) {
                     walletId: systemWallet.id,
                     action: "ALLOCATE_REWARD_BUDGET",
                     actorType: "ADMIN",
-                    actorId: typeof adminId === 'number' ? adminId : parseInt(adminId) || 0,
+                    actorId: adminIdNum,
                     before: systemBalanceBefore,
                     delta: amountDecimal.negated(),
                     after: systemBalanceAfter,
@@ -115,7 +122,7 @@ export async function allocateRewardBudget(req: Request, res: Response) {
                     walletId: targetWallet.id,
                     action: "RECEIVE_REWARD_BUDGET",
                     actorType: "ADMIN",
-                    actorId: typeof adminId === 'number' ? adminId : parseInt(adminId) || 0,
+                    actorId: adminIdNum,
                     before: targetBalanceBefore,
                     delta: amountDecimal,
                     after: targetBalanceAfter,
@@ -162,8 +169,15 @@ export async function adjustRewardBudget(req: Request, res: Response) {
         }
 
         const deltaDecimal = new Decimal(delta);
-        const adminUser = req.user;
-        const adminId = adminUser?.user || adminUser?.id || adminUser?.selfId;
+        const { adminId } = req.body;
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
+
+        const adminIdNum = typeof adminId === 'number' ? adminId : parseInt(adminId);
+        if (isNaN(adminIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid adminId" });
+        }
 
         // Get or create wallet
         const wallet = await ensureWallet(ownerType, parseInt(ownerId));
@@ -214,7 +228,7 @@ export async function adjustRewardBudget(req: Request, res: Response) {
                 walletId: wallet.id,
                 action: "ADJUST_REWARD_BUDGET",
                 actorType: "ADMIN",
-                actorId: typeof adminId === 'number' ? adminId : parseInt(adminId) || 0,
+                actorId: adminIdNum,
                 before: balanceBefore,
                 delta: deltaDecimal,
                 after: balanceAfter,

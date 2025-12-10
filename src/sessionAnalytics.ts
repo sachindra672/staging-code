@@ -2,6 +2,9 @@ import { Request, Response } from "express";
 import { prisma } from './misc';
 import { sendAnalyticsMail } from "./utils/mail";
 import * as XLSX from "xlsx";
+import { grantTaskReward } from './sisyacoin/taskRewardController'
+import { getSystemWallet } from './config/sisyacoinHelperFunctions'
+import { Decimal } from "@prisma/client/runtime/library";
 // import path from "path";
 // import ejs from "ejs";
 
@@ -192,9 +195,9 @@ interface AnalyticsCreateRequestBody {
 //               <div style="text-align: center; margin-bottom: 20px;">
 //                 <img src="https://sisyabackend.in/student/mg_mat/49/logo.png" alt="Company Logo" style="max-width: 150px; height: auto;" />
 //               </div>
-          
+
 //               <h2 style="color: #02bdfe; text-align: center;">📊 Session Analytics Report</h2>
-              
+
 //               <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
 //                 <tr><td style="padding: 8px;"><strong>Session ID:</strong></td><td style="padding: 8px;">${sessionId}</td></tr>
 //                 <tr><td style="padding: 8px;"><strong>Session Name:</strong></td><td style="padding: 8px;">${session.detail}</td></tr>
@@ -208,9 +211,9 @@ interface AnalyticsCreateRequestBody {
 //                 <tr><td style="padding: 8px;"><strong>Early Leave Rate:</strong></td><td style="padding: 8px;">${(earlyLeaveRate * 100).toFixed(2)}%</td></tr>
 //                 <tr><td style="padding: 8px;"><strong>Homework Upload Status:</strong></td><td style="padding: 8px;">${homeworkStatus}</td></tr>
 //               </table>
-          
+
 //               <hr style="margin: 30px 0; border: none; border-top: 1px solid #ccc;" />
-          
+
 //               <h3 style="color: #333;">👨‍🏫 Teacher Details</h3>
 //               <table style="width: 100%; border-collapse: collapse;">
 //                 <tr><td style="padding: 8px;"><strong>Teacher ID:</strong></td><td style="padding: 8px;">${teacherAnalytics.teacherId}</td></tr>
@@ -219,7 +222,7 @@ interface AnalyticsCreateRequestBody {
 //                 <tr><td style="padding: 8px;"><strong>Start Time (IST):</strong></td><td style="padding: 8px;">${msToDate(teacherAnalytics.startTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td></tr>
 //                 <tr><td style="padding: 8px;"><strong>End Time (IST):</strong></td><td style="padding: 8px;">${msToDate(teacherAnalytics.endTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td></tr>
 //               </table>
-          
+
 //               <p style="text-align: center; color: #888; margin-top: 30px;">This is an automated email from the <span style="color: #02bdfe;">SISYA CLASS</span></p>
 //             </div>
 //         `;
@@ -421,6 +424,369 @@ export async function addSessionAnalytics(
         });
 
         return res.status(201).json({ success: true, analytics });
+
+    } catch (error: any) {
+        console.error("Error creating analytics:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error",
+            message: error.message,
+        });
+    }
+}
+
+export async function addSessionAnalytics2(
+    req: Request<{}, {}, AnalyticsCreateRequestBody>,
+    res: Response
+) {
+    try {
+        const {
+            sessionId,
+            scheduledDuration,
+            classStartTime,
+            classEndTime,
+            students,
+            teacherAnalytics,
+        } = req.body;
+
+        // 1. Basic validation
+        if (
+            !sessionId ||
+            !scheduledDuration ||
+            !classStartTime ||
+            !classEndTime ||
+            !teacherAnalytics
+        ) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        // 2. Fetch session info
+        const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+            select: {
+                startTime: true,
+                endTime: true,
+                detail: true,
+                SessionTest: { select: { id: true } },
+                mentor: { select: { name: true, email: true } },
+                course: { select: { name: true } },
+            },
+        });
+
+        if (!session) {
+            return res.status(404).json({ success: false, error: "Session not found" });
+        }
+
+        // Convert class start/end
+        const classStart = msToDate(classStartTime);
+        const classEnd = msToDate(classEndTime);
+        const actualDuration = Math.round((classEndTime - classStartTime) / 60000);
+
+        // SPECIAL CASE HANDLING → No students joined at all
+        if (!students || students.length === 0) {
+            const analytics = await prisma.sessionAnalytics.create({
+                data: {
+                    session: { connect: { id: sessionId } },
+                    classStartTime: classStart,
+                    classEndTime: classEnd,
+                    actualDuration,
+                    scheduledDuration,
+                    finishRate: 0,
+                    earlyLeaveRate: 0,
+                    lateJoinRate: 0,
+                    studentIntervals: { create: [] }, // no intervals
+                    teacherAttendance: {
+                        create: {
+                            teacher: { connect: { id: +teacherAnalytics.teacherId } },
+                            startTime: msToDate(teacherAnalytics.startTime),
+                            endTime: msToDate(teacherAnalytics.endTime),
+                            totalDuration: Math.round(
+                                (teacherAnalytics.endTime - teacherAnalytics.startTime) / 1000
+                            ),
+                        },
+                    },
+                },
+            });
+
+            return res.status(201).json({
+                success: true,
+                message: "Analytics saved successfully (no students joined)",
+                analytics,
+                rewards: {
+                    totalParticipants: 0,
+                    totalCoinsDistributed: 0,
+                    results: [],
+                },
+            });
+        }
+
+        // ---- REMAINING LOGIC FOR WHEN STUDENTS JOINED ---- //
+
+        // 3. Batch fetch student IDs from UUIDs
+        const studentUuids = students.map((s) => s.userID);
+        const userRecords = await prisma.endUsers.findMany({
+            where: { uuid: { in: studentUuids } },
+            select: { id: true, uuid: true, name: true },
+        });
+        const uuidToIdMap = new Map(userRecords.map((u) => [u.uuid, u.id]));
+        const uuidToNameMap = new Map(userRecords.map((u) => [u.uuid, u.name]));
+
+        // 4. Time calculations
+        const scheduledStartMs = session.startTime.getTime();
+        const scheduledEndMs = session.endTime.getTime();
+        const totalDurationMs = scheduledEndMs - scheduledStartMs;
+        const lateJoinThresholdMs =
+            scheduledStartMs + totalDurationMs * LATE_JOIN_THRESHOLD_RATIO;
+
+        let finishCount = 0;
+        let earlyLeaveCount = 0;
+        let lateJoinCount = 0;
+        const totalStudents = students.length;
+
+        // Store student reward data
+        interface StudentRewardData {
+            studentId: number;
+            userName: string;
+            attendedRatio: number;
+            isLateJoin: boolean;
+            isEarlyLeave: boolean;
+        }
+        const studentRewardData: StudentRewardData[] = [];
+
+        // 5. Build student interval records
+        const studentIntervalRecords = students.flatMap((student) => {
+            const studentId = uuidToIdMap.get(student.userID);
+            const userName = uuidToNameMap.get(student.userID) || student.userName || "Unknown";
+            if (!studentId) {
+                console.warn(`⚠️ Student not found for UUID: ${student.userID}`);
+                return [];
+            }
+
+            const intervals = student.sessions.map((interval) => {
+                const join = interval.joinTime;
+                const leave = interval.leaveTime ?? classEndTime;
+                const duration = leave - join;
+                return { joinTime: join, leaveTime: leave, duration };
+            });
+
+            const validDurations = student.sessions.map((interval) => {
+                const join = interval.joinTime;
+                const leave = interval.leaveTime ?? classEndTime;
+
+                if (leave <= scheduledStartMs || join >= scheduledEndMs) {
+                    return 0;
+                }
+
+                const effectiveJoin = Math.max(join, scheduledStartMs);
+                const effectiveLeave = Math.min(leave, scheduledEndMs);
+                return Math.max(effectiveLeave - effectiveJoin, 0);
+            });
+
+            const totalAttendanceMs = validDurations.reduce((s, ms) => s + ms, 0);
+            const earliestJoin = Math.min(...intervals.map((i) => i.joinTime));
+            const latestLeave = Math.max(...intervals.map((i) => i.leaveTime));
+
+            const isLateJoin = earliestJoin > lateJoinThresholdMs;
+            const isEarlyLeave = latestLeave < scheduledEndMs;
+
+            if (isLateJoin) lateJoinCount++;
+            if (isEarlyLeave) earlyLeaveCount++;
+
+            const attendedRatio = totalAttendanceMs / totalDurationMs;
+            const attendedPercentage = attendedRatio * 100;
+            if (attendedRatio >= FINISH_THRESHOLD) finishCount++;
+
+            // Store reward data
+            studentRewardData.push({
+                studentId,
+                userName,
+                attendedRatio: attendedPercentage,
+                isLateJoin,
+                isEarlyLeave,
+            });
+
+            return intervals.map((interval) => ({
+                student: { connect: { id: studentId } },
+                joinTime: msToDate(interval.joinTime),
+                leaveTime: msToDate(interval.leaveTime),
+                duration: Math.round(interval.duration / 1000),
+                isLateJoin: interval.joinTime > lateJoinThresholdMs,
+                isEarlyLeave: interval.leaveTime < scheduledEndMs,
+            }));
+        });
+
+        // 6. Compute rates
+        const finishRate = parseFloat((finishCount / totalStudents).toFixed(3));
+        const earlyLeaveRate = parseFloat((earlyLeaveCount / totalStudents).toFixed(3));
+        const lateJoinRate = parseFloat((lateJoinCount / totalStudents).toFixed(3));
+
+        // 7. Save analytics with intervals + teacher attendance
+        const analytics = await prisma.sessionAnalytics.create({
+            data: {
+                session: { connect: { id: sessionId } },
+                classStartTime: classStart,
+                classEndTime: classEnd,
+                actualDuration,
+                scheduledDuration: totalDurationMs / 60000,
+                finishRate,
+                earlyLeaveRate,
+                lateJoinRate,
+                studentIntervals: {
+                    create: studentIntervalRecords,
+                },
+                teacherAttendance: {
+                    create: {
+                        teacher: { connect: { id: +teacherAnalytics.teacherId } },
+                        startTime: msToDate(teacherAnalytics.startTime),
+                        endTime: msToDate(teacherAnalytics.endTime),
+                        totalDuration: Math.round(
+                            (teacherAnalytics.endTime - teacherAnalytics.startTime) / 1000
+                        ),
+                    },
+                },
+            },
+        });
+
+        // 8. Grant rewards to students based on attendance
+        const rewardResults: any[] = [];
+        const baseReward = 10;
+
+        const systemWallet = await getSystemWallet();
+        const totalParticipants = studentRewardData.length;
+
+        // Calculate total coins needed (estimate: assume all get at least base + bronze)
+        const estimatedCoinsNeeded = baseReward * totalParticipants + (5 * totalParticipants);
+        const estimatedCoinsNeededDecimal = new Decimal(estimatedCoinsNeeded);
+
+        if (systemWallet.spendableBalance.lt(estimatedCoinsNeededDecimal)) {
+            console.warn(
+                `System wallet may have insufficient balance for session rewards. Available: ${systemWallet.spendableBalance}, Estimated: ${estimatedCoinsNeeded}`
+            );
+        }
+
+        // Grant rewards to each student
+        for (const studentData of studentRewardData) {
+            const { studentId, userName, attendedRatio, isLateJoin, isEarlyLeave } = studentData;
+
+            let coinsAmount = baseReward;
+            let reasonParts = [`Base attendance reward: ${baseReward} coins`];
+            let tier = "Base";
+
+            // Calculate tier bonus
+            if (attendedRatio >= 50 && attendedRatio < 75) {
+                coinsAmount += 5;
+                reasonParts.push(`Bronze tier (${attendedRatio.toFixed(1)}% attendance): +5 coins`);
+                tier = "Bronze";
+            } else if (attendedRatio >= 75 && attendedRatio < 90) {
+                coinsAmount += 10;
+                reasonParts.push(`Silver tier (${attendedRatio.toFixed(1)}% attendance): +10 coins`);
+                tier = "Silver";
+            } else if (attendedRatio >= 90 && attendedRatio < 100) {
+                coinsAmount += 15;
+                reasonParts.push(`Gold tier (${attendedRatio.toFixed(1)}% attendance): +15 coins`);
+                tier = "Gold";
+            } else if (attendedRatio >= 100 && !isLateJoin && !isEarlyLeave) {
+                // Perfect: 100% attendance, on-time, no early leave
+                coinsAmount += 10;
+                reasonParts.push(`Perfect attendance (100%, on-time, stayed until end): +10 coins`);
+                tier = "Perfect";
+            } else if (attendedRatio >= 100) {
+                // 100% attendance but not perfect (late join or early leave)
+                coinsAmount += 15;
+                reasonParts.push(`Gold tier (100% attendance): +15 coins`);
+                tier = "Gold";
+            }
+
+            const taskCode = `SESSION_ATTENDANCE_${sessionId}_${studentId}`;
+            const amountDecimal = new Decimal(coinsAmount);
+            const reason = `Session attendance - ${reasonParts.join(", ")}`;
+
+            try {
+                if (systemWallet.spendableBalance.lt(amountDecimal)) {
+                    rewardResults.push({
+                        userId: studentId,
+                        userName: userName,
+                        success: false,
+                        message: "Insufficient system wallet balance",
+                        coinsEarned: 0,
+                    });
+                    continue;
+                }
+
+                const rewardReq = {
+                    body: {
+                        userId: studentId,
+                        taskCode: taskCode,
+                        coinsAmount: coinsAmount,
+                        reason: reason,
+                        metadata: {
+                            sessionId: sessionId,
+                            sessionDetail: session.detail,
+                            attendedRatio: attendedRatio,
+                            isLateJoin: isLateJoin,
+                            isEarlyLeave: isEarlyLeave,
+                            tier: tier,
+                        },
+                    },
+                } as Request;
+
+                let rewardResponseData: any = null;
+                const rewardRes = {
+                    json: (data: any) => {
+                        rewardResponseData = data;
+                    },
+                    status: (_code: number) => ({
+                        json: (data: any) => {
+                            rewardResponseData = data;
+                        },
+                    }),
+                } as unknown as Response;
+
+                await grantTaskReward(rewardReq, rewardRes);
+
+                if (rewardResponseData?.success) {
+                    rewardResults.push({
+                        userId: studentId,
+                        userName: userName,
+                        success: true,
+                        coinsEarned: coinsAmount,
+                        message: reasonParts.join(", "),
+                        tier: tier,
+                        attendedRatio: attendedRatio.toFixed(1),
+                        userWallet: rewardResponseData.data?.userWallet || null,
+                    });
+                } else {
+                    rewardResults.push({
+                        userId: studentId,
+                        userName: userName,
+                        success: false,
+                        message: rewardResponseData?.message || "Reward grant failed",
+                        coinsEarned: 0,
+                    });
+                }
+            } catch (err) {
+                console.error(`Error granting reward to user ${studentId}:`, err);
+                rewardResults.push({
+                    userId: studentId,
+                    userName: userName,
+                    success: false,
+                    message: "Error processing reward",
+                    coinsEarned: 0,
+                });
+            }
+        }
+
+        return res.status(201).json({
+            success: true,
+            analytics,
+            rewards: {
+                totalParticipants: totalParticipants,
+                totalCoinsDistributed: rewardResults
+                    .filter((r) => r.success)
+                    .reduce((sum, r) => sum + (r.coinsEarned || 0), 0),
+                results: rewardResults,
+            },
+        });
 
     } catch (error: any) {
         console.error("Error creating analytics:", error);

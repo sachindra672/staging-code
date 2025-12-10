@@ -54,6 +54,69 @@ enum QType {
     trueFalse = "trueFalse"
 }
 
+export async function InsertSessionTests2(req: Request, res: Response) {
+    const { duration, sessionId, mentorId, questions } = req.body;
+
+    if (!duration || !sessionId || !mentorId || !Array.isArray(questions)) {
+        return res.status(400).json({ success: false, error: 'Missing or invalid required fields' });
+    }
+
+    try {
+        if (questions.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one question is required' });
+        }
+
+        // Get session to fetch endTime
+        const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+            select: { endTime: true }
+        });
+
+        if (!session) {
+            return res.status(404).json({ success: false, error: 'Session not found' });
+        }
+
+        // Calculate test timing:
+        // startTime = session's endTime
+        // endTime = session's endTime + 24 hours
+        const startTime = new Date(session.endTime);
+        const endTime = new Date(session.endTime);
+        endTime.setHours(endTime.getHours() + 24); // Add 24 hours
+
+        const sessionTest = await prisma.sessionTest.create({
+            data: {
+                startTime,
+                endTime,
+                mentorId,
+                duration,
+                sessionId,
+                sessionTestQuestion: {
+                    create: questions.map((question: any) => {
+                        return { ...question };
+                    })
+                }
+            },
+            include: {
+                sessionTestQuestion: true
+            }
+        });
+
+        res.status(201).json({ success: true, sessionTest });
+    } catch (error) {
+        console.error('Error in InsertSessionTests2:', error);
+
+        if (error instanceof Error) {
+            if (error.message === 'Invalid question object') {
+                res.status(400).json({ success: false, error: 'Invalid question format in the questions array' });
+            } else {
+                res.status(500).json({ success: false, error: 'Internal server error', message: error.message });
+            }
+        } else {
+            res.status(500).json({ success: false, error: 'An unexpected error occurred' });
+        }
+    }
+}
+
 export async function InsertSessionTestQuestions(req: Request, res: Response) {
     const { sessionTestId, type, question, option1, option2, option3, option4, correctResponse } = req.body;
 

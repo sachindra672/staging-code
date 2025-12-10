@@ -48,7 +48,7 @@ export async function initiateFiatPurchase(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Amount must be positive" });
         }
 
-        const user = req.user;
+        const { userId } = req.body;
         const role = req.role;
 
         if (role !== "user") {
@@ -58,16 +58,14 @@ export async function initiateFiatPurchase(req: Request, res: Response) {
             });
         }
 
-        // middleware se id 
-        const userId = user?.user?.id;
         if (!userId) {
-            return res.status(400).json({ success: false, message: "User ID not found" });
+            return res.status(400).json({ success: false, message: "userId is required in request body" });
         }
 
         const endUser = await prisma.endUsers.findFirst({
             where: {
                 OR: [
-                    { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
+                    { id: typeof userId === 'number' ? userId : parseInt(userId as string) || 0 },
                     { phone: typeof userId === 'string' ? userId : String(userId) }
                 ]
             },
@@ -260,7 +258,7 @@ export async function handlePaymentWebhook(req: Request, res: Response) {
 export async function getMyFiatPurchases(req: Request, res: Response) {
     try {
         const { page = 1, limit = 50 } = req.query;
-        const user = req.user;
+        const { userId } = req.query;
         const role = req.role;
 
         if (role !== "user") {
@@ -270,15 +268,14 @@ export async function getMyFiatPurchases(req: Request, res: Response) {
             });
         }
 
-        const userId = user?.user || user?.id || user?.selfId;
         if (!userId) {
-            return res.status(400).json({ success: false, message: "User ID not found" });
+            return res.status(400).json({ success: false, message: "userId is required in query params" });
         }
 
         const endUser = await prisma.endUsers.findFirst({
             where: {
                 OR: [
-                    { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
+                    { id: typeof userId === 'number' ? userId : parseInt(userId as string) || 0 },
                     { phone: typeof userId === 'string' ? userId : String(userId) }
                 ]
             },

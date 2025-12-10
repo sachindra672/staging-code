@@ -5,29 +5,33 @@ import { ensureWallet } from "../config/sisyacoinHelperFunctions";
 // Get current user's wallet
 export async function getMyWallet(req: Request, res: Response) {
     try {
-        const user = req.user;
         const role = req.role;
+        const { id } = req.body;
 
-        if (!user || !role) {
+        if (!role) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (!id) {
+            return res.status(400).json({ success: false, message: "ID is required in request body" });
         }
 
         let ownerType: "ENDUSER" | "MENTOR" | "SALESMAN" | "ADMIN" | "SUBADMIN";
         let ownerId: number;
 
-        // Map role to OwnerType and get ownerId
+        // Map role to OwnerType and get ownerId from body
         if (role === "user") {
             ownerType = "ENDUSER";
-            const userId = user.user || user.id || user.selfId;
-            if (!userId) {
-                return res.status(400).json({ success: false, message: "User ID not found in token" });
+            const userId = typeof id === 'number' ? id : parseInt(id);
+            if (isNaN(userId)) {
+                return res.status(400).json({ success: false, message: "Invalid user ID" });
             }
-            
+
             const endUser = await prisma.endUsers.findFirst({
                 where: {
                     OR: [
-                        { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
-                        { phone: typeof userId === 'string' ? userId : String(userId) }
+                        { id: userId },
+                        { phone: typeof id === 'string' ? id : String(id) }
                     ]
                 },
                 select: { id: true }
@@ -38,18 +42,18 @@ export async function getMyWallet(req: Request, res: Response) {
             ownerId = endUser.id;
         } else if (role === "mentor") {
             ownerType = "MENTOR";
-            const mentorId = user.user || user.id || user.selfId;
-            if (!mentorId) {
-                return res.status(400).json({ success: false, message: "Mentor ID not found in token" });
+            const mentorId = typeof id === 'number' ? id : parseInt(id);
+            if (isNaN(mentorId)) {
+                return res.status(400).json({ success: false, message: "Invalid mentor ID" });
             }
-            ownerId = typeof mentorId === 'number' ? mentorId : parseInt(mentorId) || 0;
+            ownerId = mentorId;
         } else if (role === "admin" || role === "subadmin") {
             ownerType = role === "admin" ? "ADMIN" : "SUBADMIN";
-            const adminId = user.user || user.id || user.selfId;
-            if (!adminId) {
-                return res.status(400).json({ success: false, message: "Admin ID not found in token" });
+            const adminId = typeof id === 'number' ? id : parseInt(id);
+            if (isNaN(adminId)) {
+                return res.status(400).json({ success: false, message: "Invalid admin ID" });
             }
-            ownerId = typeof adminId === 'number' ? adminId : parseInt(adminId) || 0;
+            ownerId = adminId;
         } else {
             return res.status(403).json({ success: false, message: "Invalid role for wallet access" });
         }

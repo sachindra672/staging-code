@@ -21,8 +21,7 @@ export async function grantManualReward(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: "Amount must be positive" });
         }
 
-        // user ko middleware se lo
-        const giverUser = req.user;
+        const { fromId } = req.body; // Get giver ID from body
         const giverRole = req.role;
 
         if (giverRole !== "mentor" && giverRole !== "subadmin") {
@@ -32,25 +31,27 @@ export async function grantManualReward(req: Request, res: Response) {
             });
         }
 
+        if (!fromId) {
+            return res.status(400).json({ success: false, message: "fromId is required in request body" });
+        }
+
         // Get giver's ID and wallet
         let giverOwnerType: "MENTOR" | "SALESMAN";
         let giverOwnerId: number;
 
         if (giverRole === "mentor") {
             giverOwnerType = "MENTOR";
-            const mentorId = giverUser?.user || giverUser?.id || giverUser?.selfId;
-            if (!mentorId) {
-                return res.status(400).json({ success: false, message: "Mentor ID not found in token" });
+            giverOwnerId = typeof fromId === 'number' ? fromId : parseInt(fromId);
+            if (isNaN(giverOwnerId)) {
+                return res.status(400).json({ success: false, message: "Invalid fromId" });
             }
-            giverOwnerId = typeof mentorId === 'number' ? mentorId : parseInt(mentorId) || 0;
         } else {
             // subadmin ke liye check karna padega ki mentor h ki salesman, assume mentor
             giverOwnerType = "MENTOR";
-            const adminId = giverUser?.user || giverUser?.id || giverUser?.selfId;
-            if (!adminId) {
-                return res.status(400).json({ success: false, message: "Admin ID not found in token" });
+            giverOwnerId = typeof fromId === 'number' ? fromId : parseInt(fromId);
+            if (isNaN(giverOwnerId)) {
+                return res.status(400).json({ success: false, message: "Invalid fromId" });
             }
-            giverOwnerId = typeof adminId === 'number' ? adminId : parseInt(adminId) || 0;
         }
 
         const giverWallet = await ensureWallet(giverOwnerType, giverOwnerId);
@@ -197,8 +198,7 @@ export async function grantManualReward(req: Request, res: Response) {
 // Mentor or saleman ka history of rewards given by me
 export async function getRewardsGiven(req: Request, res: Response) {
     try {
-        const { page = 1, limit = 50 } = req.query;
-        const giverUser = req.user;
+        const { page = 1, limit = 50, id } = req.query;
         const giverRole = req.role;
 
         if (giverRole !== "mentor" && giverRole !== "subadmin") {
@@ -208,23 +208,25 @@ export async function getRewardsGiven(req: Request, res: Response) {
             });
         }
 
+        if (!id) {
+            return res.status(400).json({ success: false, message: "id is required in query params" });
+        }
+
         let giverOwnerType: "MENTOR" | "SALESMAN";
         let giverOwnerId: number;
 
         if (giverRole === "mentor") {
             giverOwnerType = "MENTOR";
-            const mentorId = giverUser?.user || giverUser?.id || giverUser?.selfId;
-            if (!mentorId) {
-                return res.status(400).json({ success: false, message: "Mentor ID not found" });
+            giverOwnerId = typeof id === 'number' ? id : parseInt(id as string);
+            if (isNaN(giverOwnerId)) {
+                return res.status(400).json({ success: false, message: "Invalid id" });
             }
-            giverOwnerId = typeof mentorId === 'number' ? mentorId : parseInt(mentorId) || 0;
         } else {
             giverOwnerType = "MENTOR"; // Assuming subadmin acts as mentor
-            const adminId = giverUser?.user || giverUser?.id || giverUser?.selfId;
-            if (!adminId) {
-                return res.status(400).json({ success: false, message: "Admin ID not found" });
+            giverOwnerId = typeof id === 'number' ? id : parseInt(id as string);
+            if (isNaN(giverOwnerId)) {
+                return res.status(400).json({ success: false, message: "Invalid id" });
             }
-            giverOwnerId = typeof adminId === 'number' ? adminId : parseInt(adminId) || 0;
         }
 
         const wallet = await prisma.sisyaWallet.findUnique({
@@ -291,8 +293,7 @@ export async function getRewardsGiven(req: Request, res: Response) {
 // End user ko jo jo manual reward mila h
 export async function getRewardsReceived(req: Request, res: Response) {
     try {
-        const { page = 1, limit = 50 } = req.query;
-        const user = req.user;
+        const { page = 1, limit = 50, id } = req.query;
         const role = req.role;
 
         if (role !== "user") {
@@ -302,17 +303,16 @@ export async function getRewardsReceived(req: Request, res: Response) {
             });
         }
 
-        const userId = user?.user || user?.id || user?.selfId;
-        if (!userId) {
-            return res.status(400).json({ success: false, message: "User ID not found" });
+        if (!id) {
+            return res.status(400).json({ success: false, message: "id is required in query params" });
         }
 
         // Find endUser by phone or id
         const endUser = await prisma.endUsers.findFirst({
             where: {
                 OR: [
-                    { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
-                    { phone: typeof userId === 'string' ? userId : String(userId) }
+                    { id: typeof id === 'number' ? id : parseInt(id as string) || 0 },
+                    { phone: typeof id === 'string' ? id : String(id) }
                 ]
             },
             select: { id: true }

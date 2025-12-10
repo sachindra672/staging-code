@@ -4,29 +4,28 @@ import { prisma } from "../misc";
 // current user's transaction history
 export async function getMyTransactions(req: Request, res: Response) {
     try {
-        const { page = 1, limit = 50, type, from, to } = req.query;
-        const user = req.user;
+        const { page = 1, limit = 50, type, from, to, id } = req.query;
         const role = req.role;
 
-        if (!user || !role) {
+        if (!role) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (!id) {
+            return res.status(400).json({ success: false, message: "id is required in query params" });
         }
 
         let ownerType: "ENDUSER" | "MENTOR" | "SALESMAN" | "ADMIN" | "SUBADMIN";
         let ownerId: number;
 
-        // Map role to OwnerType and get ownerId
+        // Map role to OwnerType and get ownerId from query
         if (role === "user") {
             ownerType = "ENDUSER";
-            const userId = user.user || user.id || user.selfId;
-            if (!userId) {
-                return res.status(400).json({ success: false, message: "User ID not found in token" });
-            }
             const endUser = await prisma.endUsers.findFirst({
                 where: {
                     OR: [
-                        { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
-                        { phone: typeof userId === 'string' ? userId : String(userId) }
+                        { id: typeof id === 'number' ? id : parseInt(id as string) || 0 },
+                        { phone: typeof id === 'string' ? id : String(id) }
                     ]
                 },
                 select: { id: true }
@@ -37,18 +36,16 @@ export async function getMyTransactions(req: Request, res: Response) {
             ownerId = endUser.id;
         } else if (role === "mentor") {
             ownerType = "MENTOR";
-            const mentorId = user.user || user.id || user.selfId;
-            if (!mentorId) {
-                return res.status(400).json({ success: false, message: "Mentor ID not found in token" });
+            ownerId = typeof id === 'number' ? id : parseInt(id as string);
+            if (isNaN(ownerId)) {
+                return res.status(400).json({ success: false, message: "Invalid id" });
             }
-            ownerId = typeof mentorId === 'number' ? mentorId : parseInt(mentorId) || 0;
         } else if (role === "admin" || role === "subadmin") {
             ownerType = role === "admin" ? "ADMIN" : "SUBADMIN";
-            const adminId = user.user || user.id || user.selfId;
-            if (!adminId) {
-                return res.status(400).json({ success: false, message: "Admin ID not found in token" });
+            ownerId = typeof id === 'number' ? id : parseInt(id as string);
+            if (isNaN(ownerId)) {
+                return res.status(400).json({ success: false, message: "Invalid id" });
             }
-            ownerId = typeof adminId === 'number' ? adminId : parseInt(adminId) || 0;
         } else {
             return res.status(403).json({ success: false, message: "Invalid role for transaction access" });
         }
@@ -145,7 +142,6 @@ export async function getTransactionById(req: Request, res: Response) {
         }
 
         // Check if user has access to this transaction
-        const user = req.user;
         const role = req.role;
 
         if (role === "admin" || role === "subadmin") {

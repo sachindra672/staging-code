@@ -64,6 +64,7 @@ model endUsers {
   subscription              subscription[]
   Comment                   Comment[]
   BlogLike                  BlogLike[]
+  sisyaClassQuizResponses   sisyaClassQuizResponse[]
 }
 
 model mentor {
@@ -658,6 +659,7 @@ model session {
   mentor                   mentor               @relation(fields: [mentorId], references: [id])
   subject                  Subject              @relation(fields: [subjectId], references: [id])
   sessionStreamInfo        sessionStreamInfo[]
+  sisyaClassQuizzes        sisyaClassQuiz[]
 }
 
 model PtmSession {
@@ -1877,6 +1879,7 @@ enum OwnerType {
   SUBADMIN
   SYSTEM // TODO- run script, first baar for creating system wallet
 }
+
 // already created user wallet creation scripts
 
 model SisyaWallet {
@@ -2201,4 +2204,46 @@ model SisyaRewardUsage {
   updatedAt DateTime @updatedAt
 
   @@unique([walletId, date])
+}
+
+//quiz 
+model sisyaClassQuiz {
+  id            Int       @id @default(autoincrement())
+  sessionId     Int
+  quizId        String
+  title         String
+  type          String
+  question      String?
+  correctAnswer String
+  options       Json?
+  timerDuration Int
+  timerEndsAt   DateTime?
+  createdAt     DateTime  @default(now())
+  endedAt       DateTime?
+  isActive      Boolean   @default(false)
+
+  session   session                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  responses sisyaClassQuizResponse[]
+
+  @@index([sessionId])
+  @@index([quizId])
+  @@map("sisya_class_quiz")
+}
+
+model sisyaClassQuizResponse {
+  id             Int      @id @default(autoincrement())
+  quizId         Int
+  userId         Int
+  selectedAnswer String
+  timeTaken      Int
+  isCorrect      Boolean
+  createdAt      DateTime @default(now())
+
+  quiz sisyaClassQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user endUsers       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([userId])
+  @@index([quizId, userId])
+  @@map("sisya_class_quiz_response")
 }

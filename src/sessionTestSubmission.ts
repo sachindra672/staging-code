@@ -1,5 +1,8 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
+import { grantTaskReward } from './sisyacoin/taskRewardController'
+import { getSystemWallet } from './config/sisyacoinHelperFunctions'
+import { Decimal } from "@prisma/client/runtime/library";
 
 export async function getStudentListSessionTestSubmission(req: Request, res: Response) {
     const { sessionTestId } = req.body;
@@ -91,7 +94,228 @@ export async function createSessionTestSubmission(req: Request, res: Response): 
             }
         });
 
+
+
         res.status(201).json({ success: true, newSubmission });
+    } catch (error) {
+        console.error('Error creating sessionTestSubmission with responses:', error);
+
+        if (error instanceof Error) {
+            if (error.message === 'Invalid response object') {
+                res.status(400).json({ success: false, error: 'Invalid response object in the responses array' });
+            } else if (error.name === 'PrismaClientKnownRequestError') {
+                res.status(400).json({ success: false, error: 'Database error', message: error.message });
+            } else {
+                res.status(500).json({ success: false, error: 'Internal server error', message: error.message });
+            }
+        } else {
+            res.status(500).json({ success: false, error: 'An unexpected error occurred' });
+        }
+    }
+}
+
+export async function createSessionTestSubmission2(req: Request, res: Response): Promise<void> {
+    const { sessionTestId, endUsersId, responses } = req.body;
+
+    if (!sessionTestId || !endUsersId || !Array.isArray(responses)) {
+        res.status(400).json({ success: false, error: 'Missing or invalid required fields' });
+        return;
+    }
+
+    const sessionTestIdNumber = Number(sessionTestId);
+    const endUsersIdNumber = Number(endUsersId);
+
+    if (isNaN(sessionTestIdNumber) || sessionTestIdNumber <= 0) {
+        res.status(400).json({ success: false, error: 'Invalid sessionTestId' });
+        return;
+    }
+
+    if (isNaN(endUsersIdNumber) || endUsersIdNumber <= 0) {
+        res.status(400).json({ success: false, error: 'Invalid endUsersId' });
+        return;
+    }
+
+    if (responses.length === 0) {
+        res.status(400).json({ success: false, error: 'At least one response is required' });
+        return;
+    }
+
+    try {
+        const newSubmission = await prisma.sessionTestSubmission.create({
+            data: {
+                sessionTestId: sessionTestIdNumber,
+                endUsersId: endUsersIdNumber,
+                sessionTestResponse: {
+                    create: responses.map((response: any) => {
+                        return {
+                            forQuestion: { connect: { id: Number(response.sessionTestQuestionId) } },
+                            response: response.response,
+                            forTest: { connect: { id: sessionTestIdNumber } },
+                            createdBy: { connect: { id: endUsersIdNumber } }
+                        };
+                    })
+                }
+            },
+            include: {
+                sessionTestResponse: true
+            }
+        });
+        // Grant reward based on timing and correctness (deducts from system wallet)
+        let rewardInfo: any = null;
+        try {
+            // Get SessionTest to check timing
+            const sessionTest = await prisma.sessionTest.findUnique({
+                where: { id: sessionTestIdNumber },
+                include: {
+                    sessionTestQuestion: true
+                }
+            });
+
+            if (!sessionTest) {
+                console.warn(`SessionTest ${sessionTestIdNumber} not found for reward calculation`);
+                // Continue - don't fail submission
+            } else {
+                const now = new Date();
+                const startTime = new Date(sessionTest.startTime);
+                const endTime = new Date(sessionTest.endTime);
+
+                // Check if submission is before endTime
+                if (now > endTime) {
+                    console.log(`Submission after endTime - no reward granted for test ${sessionTestIdNumber}`);
+                    rewardInfo = {
+                        coinsEarned: 0,
+                        message: "Submission deadline passed - no reward",
+                        breakdown: {
+                            base: 0,
+                            earlyBonus: 0,
+                            perfectScoreBonus: 0
+                        }
+                    };
+                } else {
+                    // Base reward: 20 coins (if submitted before endTime)
+                    let coinsAmount = 20;
+                    let reasonParts: string[] = ['Base reward: 20 coins'];
+                    let breakdown = {
+                        base: 20,
+                        earlyBonus: 0,
+                        perfectScoreBonus: 0
+                    };
+
+                    // Bonus: +10 coins if submitted within 3 hours of startTime
+                    const threeHoursAfterStart = new Date(startTime);
+                    threeHoursAfterStart.setHours(threeHoursAfterStart.getHours() + 3);
+                    const isWithin3Hours = now <= threeHoursAfterStart;
+
+                    if (isWithin3Hours) {
+                        coinsAmount += 10;
+                        breakdown.earlyBonus = 10;
+                        reasonParts.push('Early submission bonus: +10 coins');
+                    }
+
+                    // Bonus: +15 coins if all answers are correct
+                    let correctAnswers = 0;
+                    let totalQuestions = sessionTest.sessionTestQuestion.length;
+
+                    newSubmission.sessionTestResponse.forEach((resp: any) => {
+                        const question = sessionTest.sessionTestQuestion.find(
+                            q => q.id === resp.sessionTestQuestionId
+                        );
+                        if (question && resp.response === question.correctResponse) {
+                            correctAnswers++;
+                        }
+                    });
+
+                    const isPerfectScore = correctAnswers === totalQuestions && totalQuestions > 0;
+                    if (isPerfectScore) {
+                        coinsAmount += 15;
+                        breakdown.perfectScoreBonus = 15;
+                        reasonParts.push('Perfect score bonus: +15 coins');
+                    }
+
+                    const taskCode = `SESSION_TEST_${sessionTestIdNumber}`;
+                    const amountDecimal = new Decimal(coinsAmount);
+                    const reason = `Session test completion - ${reasonParts.join(', ')} (Score: ${correctAnswers}/${totalQuestions})`;
+
+                    // Check system wallet balance before granting reward
+                    const systemWallet = await getSystemWallet();
+                    if (systemWallet.spendableBalance.lt(amountDecimal)) {
+                        console.warn(`System wallet has insufficient balance for task reward. Available: ${systemWallet.spendableBalance}, Required: ${coinsAmount}`);
+                        rewardInfo = {
+                            coinsEarned: 0,
+                            message: "System wallet has insufficient balance",
+                            breakdown: breakdown,
+                            score: `${correctAnswers}/${totalQuestions}`
+                        };
+                    } else {
+                        const rewardReq = {
+                            body: {
+                                userId: endUsersIdNumber,
+                                taskCode: taskCode,
+                                coinsAmount: coinsAmount,
+                                reason: reason,
+                                metadata: {
+                                    sessionTestId: sessionTestIdNumber,
+                                    score: correctAnswers,
+                                    totalQuestions: totalQuestions,
+                                    submittedWithin3Hours: isWithin3Hours,
+                                    submittedBeforeEndTime: true
+                                }
+                            }
+                        } as Request;
+
+                        // Create a response collector to capture reward data
+                        let rewardResponseData: any = null;
+                        const rewardRes = {
+                            json: (data: any) => {
+                                rewardResponseData = data;
+                            },
+                            status: (_code: number) => ({
+                                json: (data: any) => {
+                                    rewardResponseData = data;
+                                }
+                            })
+                        } as unknown as Response;
+
+                        // Grant reward (await to get response)
+                        await grantTaskReward(rewardReq, rewardRes);
+
+                        if (rewardResponseData?.success) {
+                            rewardInfo = {
+                                coinsEarned: coinsAmount,
+                                message: reasonParts.join(', '),
+                                breakdown: breakdown,
+                                score: `${correctAnswers}/${totalQuestions}`,
+                                userWallet: rewardResponseData.data?.userWallet || null,
+                                reward: {
+                                    reward: rewardResponseData.data?.reward || null,
+                                    transactions: rewardResponseData.data?.transactions || null
+                                }
+                            };
+                        } else {
+                            rewardInfo = {
+                                coinsEarned: 0,
+                                message: "Reward grant failed",
+                                breakdown: breakdown,
+                                score: `${correctAnswers}/${totalQuestions}`
+                            };
+                        }
+                    }
+                }
+            }
+        } catch (rewardError) {
+            console.error('Error in reward granting logic:', rewardError);
+            rewardInfo = {
+                coinsEarned: 0,
+                message: "Error processing reward",
+                error: rewardError instanceof Error ? rewardError.message : "Unknown error"
+            };
+        }
+
+        res.status(201).json({
+            success: true,
+            submission: newSubmission,
+            reward: rewardInfo
+        });
     } catch (error) {
         console.error('Error creating sessionTestSubmission with responses:', error);
 
