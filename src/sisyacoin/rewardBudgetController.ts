@@ -393,3 +393,130 @@ export async function getUserRewardLimits(req: Request, res: Response) {
     }
 }
 
+// Mentor/Salesman: Get their own daily and monthly reward limits
+export async function getMyRewardLimits(req: Request, res: Response) {
+    try {
+        const { mentorId } = req.body; // Get mentor/salesman ID from body
+        const role = req.role;
+
+        if (!mentorId) {
+            return res.status(400).json({ success: false, message: "mentorId is required in request body" });
+        }
+
+        if (role !== "mentor" && role !== "subadmin") {
+            return res.status(403).json({
+                success: false,
+                message: "Only mentors and salesmen can access this endpoint"
+            });
+        }
+
+        const ownerId = typeof mentorId === 'number' ? mentorId : parseInt(mentorId);
+        if (isNaN(ownerId)) {
+            return res.status(400).json({ success: false, message: "Invalid mentorId" });
+        }
+
+        // Determine owner type based on role
+        const ownerType = role === "mentor" ? "MENTOR" : "SALESMAN";
+
+        // Get wallet
+        const wallet = await prisma.sisyaWallet.findUnique({
+            where: {
+                ownerType_ownerId: {
+                    ownerType: ownerType,
+                    ownerId: ownerId
+                }
+            }
+        });
+
+        if (!wallet) {
+            return res.status(404).json({ success: false, message: "Wallet not found" });
+        }
+
+        // Get user-specific limit override (if exists)
+        const userLimit = await prisma.sisyaRewardLimitUser.findUnique({
+            where: { walletId: wallet.id }
+        });
+
+        // Get role-based limit (fallback if no user-specific limit)
+        const roleLimit = await prisma.sisyaRewardLimit.findUnique({
+            where: { role: ownerType }
+        });
+
+        // Determine effective limits (user-specific override takes precedence)
+        const effectiveDailyLimit = userLimit?.isActive
+            ? userLimit.dailyLimit
+            : (roleLimit?.isActive ? roleLimit.dailyLimit : new Decimal(0));
+
+        const effectiveMonthlyLimit = userLimit?.isActive
+            ? (userLimit.monthlyLimit || null)
+            : (roleLimit?.isActive ? (roleLimit.monthlyLimit || null) : null);
+
+        // Get usage for today and this month
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        const [todayUsage, monthUsage] = await Promise.all([
+            prisma.sisyaRewardUsage.findUnique({
+                where: {
+                    walletId_date: {
+                        walletId: wallet.id,
+                        date: today
+                    }
+                }
+            }),
+            prisma.sisyaRewardUsage.findMany({
+                where: {
+                    walletId: wallet.id,
+                    date: { gte: startOfMonth }
+                }
+            })
+        ]);
+
+        const todayUsageAmount = todayUsage?.amountRewarded || new Decimal(0);
+        const totalMonthUsage = monthUsage.reduce(
+            (sum, usage) => sum.plus(usage.amountRewarded),
+            new Decimal(0)
+        );
+
+        // Calculate remaining limits
+        const remainingDaily = effectiveDailyLimit.minus(todayUsageAmount);
+        const remainingMonthly = effectiveMonthlyLimit
+            ? effectiveMonthlyLimit.minus(totalMonthUsage)
+            : null;
+
+        return res.json({
+            success: true,
+            data: {
+                wallet: {
+                    id: wallet.id,
+                    ownerType: wallet.ownerType,
+                    ownerId: wallet.ownerId,
+                    rewardBudget: wallet.rewardBudget
+                },
+                limits: {
+                    daily: {
+                        limit: effectiveDailyLimit,
+                        used: todayUsageAmount,
+                        remaining: remainingDaily,
+                        isUserOverride: userLimit?.isActive || false
+                    },
+                    monthly: {
+                        limit: effectiveMonthlyLimit,
+                        used: totalMonthUsage,
+                        remaining: remainingMonthly,
+                        isUserOverride: userLimit?.isActive || false
+                    }
+                },
+                usage: {
+                    today: todayUsageAmount,
+                    thisMonth: totalMonthUsage
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Error getting my reward limits:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+}
+

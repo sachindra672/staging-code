@@ -2136,6 +2136,7 @@ model SisyaStoreOrder {
 
   status StoreOrderStatus @default(PENDING)
 
+  address Json?
   metadata    Json?
   createdAt   DateTime  @default(now())
   completedAt DateTime?

@@ -391,6 +391,22 @@ export async function GetUserById(req: Request, res: Response) {
     }
 }
 
+export async function GetUserIdByUuid(req: Request, res: Response) {
+    const { uuid } = req.body;
+
+    if (!uuid) return res.status(400).json({ success: false, message: 'uuid is required' });
+
+    try {
+        const existingUser = await prisma.endUsers.findFirst({ where: { uuid } });
+        if (!existingUser) return res.status(404).send("user not found");
+        // Only return the ID as requested
+        res.status(200).json({ success: true, id: existingUser.id });
+    } catch (error) {
+        console.error('Error fetching user id by uuid:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
 export async function createUserAdmin(req: Request, res: Response) {
     const { type, name, email, phone, grade, imageData, educationBoardId } = req.body;
     const address = "some address";

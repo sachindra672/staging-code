@@ -370,373 +370,6 @@ export async function submitQuizResponse(req: Request, res: Response) {
     }
 }
 
-// // POST: End quiz and save all responses (bulk save)
-// export async function endQuiz(req: Request, res: Response) {
-//     try {
-//         const {
-//             quizId,
-//             responses, // Array of responses from frontend
-//         } = req.body;
-
-//         if (!quizId) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Quiz ID is required",
-//             });
-//         }
-
-//         // Find quiz
-//         const quiz = await prisma.sisyaClassQuiz.findFirst({
-//             where: {
-//                 OR: [
-//                     { id: Number(quizId) },
-//                     { quizId: String(quizId) },
-//                 ],
-//             },
-//         });
-
-//         if (!quiz) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Quiz not found",
-//             });
-//         }
-
-//         // Update quiz to inactive and set endedAt
-//         await prisma.sisyaClassQuiz.update({
-//             where: { id: quiz.id },
-//             data: {
-//                 isActive: false,
-//                 endedAt: new Date(),
-//             },
-//         });
-
-//         // If responses array is provided, save them in bulk
-//         if (responses && Array.isArray(responses) && responses.length > 0) {
-//             // Prepare response data
-//             const responseData = responses.map((r: any) => {
-//                 const isCorrect = r.selectedAnswer?.toLowerCase() === quiz.correctAnswer.toLowerCase();
-//                 return {
-//                     quizId: quiz.id,
-//                     userId: Number(r.userId),
-//                     selectedAnswer: String(r.selectedAnswer),
-//                     timeTaken: Number(r.timeTaken || 0),
-//                     isCorrect,
-//                 };
-//             });
-
-//             // Bulk create responses (skip duplicates)
-//             await prisma.sisyaClassQuizResponse.createMany({
-//                 data: responseData,
-//                 skipDuplicates: true,
-//             });
-//         }
-
-//         // Get updated quiz with all responses
-//         const updatedQuiz = await prisma.sisyaClassQuiz.findUnique({
-//             where: { id: quiz.id },
-//             include: {
-//                 responses: {
-//                     include: {
-//                         user: {
-//                             select: {
-//                                 id: true,
-//                                 name: true,
-//                                 email: true,
-//                             },
-//                         },
-//                     },
-//                     orderBy: [
-//                         { isCorrect: "desc" },
-//                         { timeTaken: "asc" },
-//                     ],
-//                 },
-//             },
-//         });
-
-//         // Calculate top 3 performers
-//         const topPerformers = updatedQuiz?.responses
-//             .filter((r) => r.isCorrect)
-//             .sort((a, b) => a.timeTaken - b.timeTaken)
-//             .slice(0, 3)
-//             .map((r) => ({
-//                 userId: r.userId,
-//                 userName: r.user.name,
-//                 timeTaken: r.timeTaken,
-//                 selectedAnswer: r.selectedAnswer,
-//             })) || [];
-
-//         return res.json({
-//             success: true,
-//             message: "Quiz ended successfully",
-//             data: {
-//                 quiz: updatedQuiz,
-//                 topPerformers,
-//             },
-//         });
-//     } catch (error: any) {
-//         console.error("Error ending quiz:", error);
-//         return res.status(500).json({
-//             success: false,
-//             message: "Internal server error",
-//         });
-//     }
-// }
-
-// export async function endQuiz(req: Request, res: Response) {
-//     try {
-//         const {
-//             quizId,
-//             responses,
-//         } = req.body;
-
-//         if (!quizId) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Quiz ID is required",
-//             });
-//         }
-
-//         // Build OR conditions - only include numeric ID if quizId is actually a number
-//         const orConditions: any[] = [
-//             { quizId: String(quizId) },
-//         ];
-
-//         // Only add numeric ID condition if quizId can be converted to a valid number
-//         const numericId = Number(quizId);
-//         if (!isNaN(numericId) && isFinite(numericId)) {
-//             orConditions.unshift({ id: numericId });
-//         }
-
-//         // Find quiz
-//         const quiz = await prisma.sisyaClassQuiz.findFirst({
-//             where: {
-//                 OR: orConditions,
-//             },
-//         });
-
-//         if (!quiz) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Quiz not found",
-//             });
-//         }
-
-//         // Update quiz to inactive and set endedAt
-//         await prisma.sisyaClassQuiz.update({
-//             where: { id: quiz.id },
-//             data: {
-//                 isActive: false,
-//                 endedAt: new Date(),
-//             },
-//         });
-
-//         // If responses array is provided, save them in bulk
-//         if (responses && Array.isArray(responses) && responses.length > 0) {
-//             // Prepare response data with validation
-//             const responseData = responses
-//                 .map((r: any) => {
-//                     // Validate userId
-//                     const userId = Number(r.userId);
-//                     if (isNaN(userId) || !isFinite(userId)) {
-//                         return null; // Skip invalid userIds
-//                     }
-
-//                     const isCorrect = r.selectedAnswer?.toLowerCase() === quiz.correctAnswer.toLowerCase();
-
-//                     return {
-//                         quizId: quiz.id,
-//                         userId: userId,
-//                         selectedAnswer: String(r.selectedAnswer || ''),
-//                         timeTaken: Number(r.timeTaken || 0),
-//                         isCorrect,
-//                     };
-//                 })
-//                 .filter((r: any) => r !== null); // Remove invalid entries
-
-//             // Bulk create responses (skip duplicates)
-//             if (responseData.length > 0) {
-//                 await prisma.sisyaClassQuizResponse.createMany({
-//                     data: responseData,
-//                     skipDuplicates: true,
-//                 });
-//             }
-//         }
-
-//         // Get updated quiz with all responses
-//         const updatedQuiz = await prisma.sisyaClassQuiz.findUnique({
-//             where: { id: quiz.id },
-//             include: {
-//                 responses: {
-//                     include: {
-//                         user: {
-//                             select: {
-//                                 id: true,
-//                                 name: true,
-//                                 email: true,
-//                             },
-//                         },
-//                     },
-//                     orderBy: [
-//                         { isCorrect: "desc" },
-//                         { timeTaken: "asc" },
-//                     ],
-//                 },
-//             },
-//         });
-
-//         // Calculate top 3 performers
-//         const correctResponses = updatedQuiz?.responses
-//             .filter((r) => r.isCorrect)
-//             .sort((a, b) => a.timeTaken - b.timeTaken) || [];
-
-//         const topPerformers = correctResponses
-//             .slice(0, 3)
-//             .map((r) => ({
-//                 userId: r.userId,
-//                 userName: r.user.name,
-//                 timeTaken: r.timeTaken,
-//                 selectedAnswer: r.selectedAnswer,
-//             }));
-
-//         // Grant rewards to all participants
-//         const rewardResults: any[] = [];
-//         const baseReward = 10; // 10 coins for all participants who answered correctly
-//         const bonuses = [10, 5, 3]; // Bonuses for 1st, 2nd, 3rd place
-
-//         // Check system wallet balance first
-//         const systemWallet = await getSystemWallet();
-//         const totalParticipants = correctResponses.length;
-//         const totalCoinsNeeded = (baseReward * totalParticipants) +
-//             (topPerformers.length > 0 ? bonuses[0] : 0) +
-//             (topPerformers.length > 1 ? bonuses[1] : 0) +
-//             (topPerformers.length > 2 ? bonuses[2] : 0);
-
-//         const totalCoinsNeededDecimal = new Decimal(totalCoinsNeeded);
-
-//         if (systemWallet.spendableBalance.lt(totalCoinsNeededDecimal)) {
-//             console.warn(`System wallet has insufficient balance for quiz rewards. Available: ${systemWallet.spendableBalance}, Required: ${totalCoinsNeeded}`);
-//         } else {
-//             // Grant rewards to all participants who answered correctly
-//             for (let i = 0; i < correctResponses.length; i++) {
-//                 const response = correctResponses[i];
-//                 const isTopPerformer = i < 3;
-//                 const position = i + 1;
-
-//                 let coinsAmount = baseReward;
-//                 let reasonParts = [`Base participation reward: ${baseReward} coins`];
-
-//                 // Add position bonus
-//                 if (isTopPerformer) {
-//                     const bonus = bonuses[i];
-//                     coinsAmount += bonus;
-//                     reasonParts.push(`Position ${position} bonus: +${bonus} coins`);
-//                 }
-
-//                 const taskCode = `QUIZ_${quiz.id}_${response.userId}`;
-//                 const amountDecimal = new Decimal(coinsAmount);
-//                 const reason = `Quiz participation - ${reasonParts.join(', ')}`;
-
-//                 try {
-//                     // Check if we still have enough balance
-//                     if (systemWallet.spendableBalance.lt(amountDecimal)) {
-//                         console.warn(`System wallet balance insufficient for user ${response.userId}. Skipping reward.`);
-//                         rewardResults.push({
-//                             userId: response.userId,
-//                             userName: response.user.name,
-//                             success: false,
-//                             message: "Insufficient system wallet balance",
-//                             coinsEarned: 0,
-//                         });
-//                         continue;
-//                     }
-
-//                     const rewardReq = {
-//                         body: {
-//                             userId: response.userId,
-//                             taskCode: taskCode,
-//                             coinsAmount: coinsAmount,
-//                             reason: reason,
-//                             metadata: {
-//                                 quizId: quiz.id,
-//                                 quizTitle: quiz.title,
-//                                 position: isTopPerformer ? position : null,
-//                                 isCorrect: true,
-//                                 timeTaken: response.timeTaken,
-//                             }
-//                         }
-//                     } as Request;
-
-//                     let rewardResponseData: any = null;
-//                     const rewardRes = {
-//                         json: (data: any) => {
-//                             rewardResponseData = data;
-//                         },
-//                         status: (_code: number) => ({
-//                             json: (data: any) => {
-//                                 rewardResponseData = data;
-//                             }
-//                         })
-//                     } as unknown as Response;
-
-//                     await grantTaskReward(rewardReq, rewardRes);
-
-//                     if (rewardResponseData?.success) {
-//                         rewardResults.push({
-//                             userId: response.userId,
-//                             userName: response.user.name,
-//                             success: true,
-//                             coinsEarned: coinsAmount,
-//                             message: reasonParts.join(', '),
-//                             position: isTopPerformer ? position : null,
-//                             userWallet: rewardResponseData.data?.userWallet || null,
-//                         });
-//                     } else {
-//                         rewardResults.push({
-//                             userId: response.userId,
-//                             userName: response.user.name,
-//                             success: false,
-//                             message: rewardResponseData?.message || "Reward grant failed",
-//                             coinsEarned: 0,
-//                         });
-//                     }
-//                 } catch (rewardError) {
-//                     console.error(`Error granting reward to user ${response.userId}:`, rewardError);
-//                     rewardResults.push({
-//                         userId: response.userId,
-//                         userName: response.user.name,
-//                         success: false,
-//                         message: "Error processing reward",
-//                         error: rewardError instanceof Error ? rewardError.message : "Unknown error",
-//                         coinsEarned: 0,
-//                     });
-//                 }
-//             }
-//         }
-
-//         return res.json({
-//             success: true,
-//             message: "Quiz ended successfully",
-//             data: {
-//                 quiz: updatedQuiz,
-//                 topPerformers,
-//                 rewards: {
-//                     totalParticipants: totalParticipants,
-//                     totalCoinsDistributed: rewardResults
-//                         .filter(r => r.success)
-//                         .reduce((sum, r) => sum + (r.coinsEarned || 0), 0),
-//                     results: rewardResults,
-//                 },
-//             },
-//         });
-//     } catch (error: any) {
-//         console.error("Error ending quiz:", error);
-//         return res.status(500).json({
-//             success: false,
-//             message: "Internal server error",
-//         });
-//     }
-// }
 export async function endQuiz(req: Request, res: Response) {
     try {
         const { quizId, responses } = req.body;
@@ -1018,4 +651,577 @@ export async function endQuiz(req: Request, res: Response) {
     }
 }
 
+// POST: Get leaderboard for a particular session
+export async function getLeaderboardBySession(req: Request, res: Response) {
+    try {
+        const { sessionId, page = 1, limit = 50 } = req.body || {};
 
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                message: "Session ID is required",
+            });
+        }
+
+        const pageNumber = Number(page);
+        const pageSize = Number(limit);
+
+        if (pageNumber <= 0 || pageSize <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive numbers",
+            });
+        }
+
+        // Verify session exists
+        const session = await prisma.session.findUnique({
+            where: { id: Number(sessionId) },
+            include: {
+                course: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                message: "Session not found",
+            });
+        }
+
+        // Get all quizzes for this session
+        const quizzes = await prisma.sisyaClassQuiz.findMany({
+            where: {
+                sessionId: Number(sessionId),
+                isActive: false, // Only include ended quizzes
+            },
+            include: {
+                responses: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Aggregate leaderboard data by user
+        const leaderboardMap = new Map<number, {
+            userId: number;
+            userName: string;
+            userEmail: string;
+            totalQuizzes: number;
+            correctAnswers: number;
+            incorrectAnswers: number;
+            totalTimeTaken: number;
+            averageTimeTaken: number;
+            accuracy: number;
+            score: number;
+        }>();
+
+        quizzes.forEach((quiz) => {
+            quiz.responses.forEach((response) => {
+                const userId = response.userId;
+                const existing = leaderboardMap.get(userId);
+
+                if (existing) {
+                    existing.totalQuizzes += 1;
+                    existing.correctAnswers += response.isCorrect ? 1 : 0;
+                    existing.incorrectAnswers += response.isCorrect ? 0 : 1;
+                    existing.totalTimeTaken += response.timeTaken;
+                    existing.averageTimeTaken = existing.totalTimeTaken / existing.totalQuizzes;
+                    existing.accuracy = (existing.correctAnswers / existing.totalQuizzes) * 100;
+                    // Score = correct answers * 100 points per quiz
+                    existing.score += response.isCorrect ? 100 : 0;
+                } else {
+                    leaderboardMap.set(userId, {
+                        userId,
+                        userName: response.user.name,
+                        userEmail: response.user.email,
+                        totalQuizzes: 1,
+                        correctAnswers: response.isCorrect ? 1 : 0,
+                        incorrectAnswers: response.isCorrect ? 0 : 1,
+                        totalTimeTaken: response.timeTaken,
+                        averageTimeTaken: response.timeTaken,
+                        accuracy: response.isCorrect ? 100 : 0,
+                        score: response.isCorrect ? 100 : 0,
+                    });
+                }
+            });
+        });
+
+        // Convert to array and sort by score (descending), then by average time (ascending)
+        let leaderboard = Array.from(leaderboardMap.values()).sort((a, b) => {
+            if (b.score !== a.score) {
+                return b.score - a.score;
+            }
+            return a.averageTimeTaken - b.averageTimeTaken;
+        });
+
+        // Add rank
+        leaderboard = leaderboard.map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+        }));
+
+        // Pagination
+        const skip = (pageNumber - 1) * pageSize;
+        const paginatedLeaderboard = leaderboard.slice(skip, skip + pageSize);
+
+        // Prepare quiz details
+        const quizDetails = quizzes.map((quiz) => {
+            const totalResponses = quiz.responses.length;
+            const correctResponses = quiz.responses.filter((r) => r.isCorrect).length;
+            return {
+                id: quiz.id,
+                quizId: quiz.quizId,
+                title: quiz.title,
+                type: quiz.type,
+                question: quiz.question,
+                correctAnswer: quiz.correctAnswer,
+                options: quiz.options,
+                timerDuration: quiz.timerDuration,
+                createdAt: quiz.createdAt,
+                endedAt: quiz.endedAt,
+                statistics: {
+                    totalResponses,
+                    correctResponses,
+                    incorrectResponses: totalResponses - correctResponses,
+                    accuracy: totalResponses > 0 ? (correctResponses / totalResponses) * 100 : 0,
+                },
+            };
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                session: {
+                    id: session.id,
+                    detail: session.detail,
+                    startTime: session.startTime,
+                    endTime: session.endTime,
+                    course: session.course,
+                },
+                quizzes: {
+                    total: quizzes.length,
+                    details: quizDetails,
+                },
+                leaderboard: paginatedLeaderboard,
+                pagination: {
+                    total: leaderboard.length,
+                    page: pageNumber,
+                    limit: pageSize,
+                    totalPages: Math.ceil(leaderboard.length / pageSize),
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching session leaderboard:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+}
+
+// POST: Get leaderboard for a particular day
+export async function getLeaderboardByDay(req: Request, res: Response) {
+    try {
+        const { date, page = 1, limit = 50 } = req.body || {};
+
+        if (!date) {
+            return res.status(400).json({
+                success: false,
+                message: "Date is required (format: YYYY-MM-DD)",
+            });
+        }
+
+        const pageNumber = Number(page);
+        const pageSize = Number(limit);
+
+        if (pageNumber <= 0 || pageSize <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive numbers",
+            });
+        }
+
+        // Parse date and create date range (start and end of day)
+        const targetDate = new Date(date);
+        if (isNaN(targetDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid date format. Use YYYY-MM-DD",
+            });
+        }
+
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Get all sessions for this day
+        const sessions = await prisma.session.findMany({
+            where: {
+                startTime: {
+                    gte: startOfDay,
+                    lte: endOfDay,
+                },
+            },
+            include: {
+                sisyaClassQuizzes: {
+                    where: {
+                        isActive: false, // Only ended quizzes
+                    },
+                    include: {
+                        responses: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        email: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Aggregate leaderboard data by user across all sessions of the day
+        const leaderboardMap = new Map<number, {
+            userId: number;
+            userName: string;
+            userEmail: string;
+            totalQuizzes: number;
+            correctAnswers: number;
+            incorrectAnswers: number;
+            totalTimeTaken: number;
+            averageTimeTaken: number;
+            accuracy: number;
+            score: number;
+            sessionsParticipated: Set<number>;
+        }>();
+
+        sessions.forEach((session) => {
+            session.sisyaClassQuizzes.forEach((quiz) => {
+                quiz.responses.forEach((response) => {
+                    const userId = response.userId;
+                    const existing = leaderboardMap.get(userId);
+
+                    if (existing) {
+                        existing.totalQuizzes += 1;
+                        existing.correctAnswers += response.isCorrect ? 1 : 0;
+                        existing.incorrectAnswers += response.isCorrect ? 0 : 1;
+                        existing.totalTimeTaken += response.timeTaken;
+                        existing.averageTimeTaken = existing.totalTimeTaken / existing.totalQuizzes;
+                        existing.accuracy = (existing.correctAnswers / existing.totalQuizzes) * 100;
+                        existing.score += response.isCorrect ? 100 : 0;
+                        existing.sessionsParticipated.add(session.id);
+                    } else {
+                        const sessionsSet = new Set<number>();
+                        sessionsSet.add(session.id);
+                        leaderboardMap.set(userId, {
+                            userId,
+                            userName: response.user.name,
+                            userEmail: response.user.email,
+                            totalQuizzes: 1,
+                            correctAnswers: response.isCorrect ? 1 : 0,
+                            incorrectAnswers: response.isCorrect ? 0 : 1,
+                            totalTimeTaken: response.timeTaken,
+                            averageTimeTaken: response.timeTaken,
+                            accuracy: response.isCorrect ? 100 : 0,
+                            score: response.isCorrect ? 100 : 0,
+                            sessionsParticipated: sessionsSet,
+                        });
+                    }
+                });
+            });
+        });
+
+        // Convert to array and sort by score (descending), then by average time (ascending)
+        let leaderboard = Array.from(leaderboardMap.values())
+            .map((entry) => ({
+                ...entry,
+                sessionsParticipated: entry.sessionsParticipated.size,
+            }))
+            .sort((a, b) => {
+                if (b.score !== a.score) {
+                    return b.score - a.score;
+                }
+                return a.averageTimeTaken - b.averageTimeTaken;
+            });
+
+        // Add rank
+        leaderboard = leaderboard.map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+        }));
+
+        // Pagination
+        const skip = (pageNumber - 1) * pageSize;
+        const paginatedLeaderboard = leaderboard.slice(skip, skip + pageSize);
+
+        // Collect all quizzes with their details
+        const allQuizzes: any[] = [];
+        sessions.forEach((session) => {
+            session.sisyaClassQuizzes.forEach((quiz) => {
+                const totalResponses = quiz.responses.length;
+                const correctResponses = quiz.responses.filter((r) => r.isCorrect).length;
+                allQuizzes.push({
+                    id: quiz.id,
+                    quizId: quiz.quizId,
+                    sessionId: session.id,
+                    sessionDetail: session.detail,
+                    title: quiz.title,
+                    type: quiz.type,
+                    question: quiz.question,
+                    correctAnswer: quiz.correctAnswer,
+                    options: quiz.options,
+                    timerDuration: quiz.timerDuration,
+                    createdAt: quiz.createdAt,
+                    endedAt: quiz.endedAt,
+                    statistics: {
+                        totalResponses,
+                        correctResponses,
+                        incorrectResponses: totalResponses - correctResponses,
+                        accuracy: totalResponses > 0 ? (correctResponses / totalResponses) * 100 : 0,
+                    },
+                });
+            });
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                date: date,
+                totalSessions: sessions.length,
+                quizzes: {
+                    total: allQuizzes.length,
+                    details: allQuizzes,
+                },
+                leaderboard: paginatedLeaderboard,
+                pagination: {
+                    total: leaderboard.length,
+                    page: pageNumber,
+                    limit: pageSize,
+                    totalPages: Math.ceil(leaderboard.length / pageSize),
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching day leaderboard:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+}
+
+// POST: Get leaderboard for a particular course
+export async function getLeaderboardByCourse(req: Request, res: Response) {
+    try {
+        const { courseId, page = 1, limit = 50 } = req.body || {};
+
+        if (!courseId) {
+            return res.status(400).json({
+                success: false,
+                message: "Course ID is required",
+            });
+        }
+
+        const pageNumber = Number(page);
+        const pageSize = Number(limit);
+
+        if (pageNumber <= 0 || pageSize <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive numbers",
+            });
+        }
+
+        // Verify course exists
+        const course = await prisma.bigCourse.findUnique({
+            where: { id: Number(courseId) },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+            },
+        });
+
+        if (!course) {
+            return res.status(404).json({
+                success: false,
+                message: "Course not found",
+            });
+        }
+
+        // Get all sessions for this course
+        const sessions = await prisma.session.findMany({
+            where: {
+                bigCourseId: Number(courseId),
+            },
+            include: {
+                sisyaClassQuizzes: {
+                    where: {
+                        isActive: false, // Only ended quizzes
+                    },
+                    include: {
+                        responses: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        email: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Aggregate leaderboard data by user across all sessions of the course
+        const leaderboardMap = new Map<number, {
+            userId: number;
+            userName: string;
+            userEmail: string;
+            totalQuizzes: number;
+            correctAnswers: number;
+            incorrectAnswers: number;
+            totalTimeTaken: number;
+            averageTimeTaken: number;
+            accuracy: number;
+            score: number;
+            sessionsParticipated: Set<number>;
+        }>();
+
+        sessions.forEach((session) => {
+            session.sisyaClassQuizzes.forEach((quiz) => {
+                quiz.responses.forEach((response) => {
+                    const userId = response.userId;
+                    const existing = leaderboardMap.get(userId);
+
+                    if (existing) {
+                        existing.totalQuizzes += 1;
+                        existing.correctAnswers += response.isCorrect ? 1 : 0;
+                        existing.incorrectAnswers += response.isCorrect ? 0 : 1;
+                        existing.totalTimeTaken += response.timeTaken;
+                        existing.averageTimeTaken = existing.totalTimeTaken / existing.totalQuizzes;
+                        existing.accuracy = (existing.correctAnswers / existing.totalQuizzes) * 100;
+                        existing.score += response.isCorrect ? 100 : 0;
+                        existing.sessionsParticipated.add(session.id);
+                    } else {
+                        const sessionsSet = new Set<number>();
+                        sessionsSet.add(session.id);
+                        leaderboardMap.set(userId, {
+                            userId,
+                            userName: response.user.name,
+                            userEmail: response.user.email,
+                            totalQuizzes: 1,
+                            correctAnswers: response.isCorrect ? 1 : 0,
+                            incorrectAnswers: response.isCorrect ? 0 : 1,
+                            totalTimeTaken: response.timeTaken,
+                            averageTimeTaken: response.timeTaken,
+                            accuracy: response.isCorrect ? 100 : 0,
+                            score: response.isCorrect ? 100 : 0,
+                            sessionsParticipated: sessionsSet,
+                        });
+                    }
+                });
+            });
+        });
+
+        // Convert to array and sort by score (descending), then by average time (ascending)
+        let leaderboard = Array.from(leaderboardMap.values())
+            .map((entry) => ({
+                ...entry,
+                sessionsParticipated: entry.sessionsParticipated.size,
+            }))
+            .sort((a, b) => {
+                if (b.score !== a.score) {
+                    return b.score - a.score;
+                }
+                return a.averageTimeTaken - b.averageTimeTaken;
+            });
+
+        // Add rank
+        leaderboard = leaderboard.map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+        }));
+
+        // Pagination
+        const skip = (pageNumber - 1) * pageSize;
+        const paginatedLeaderboard = leaderboard.slice(skip, skip + pageSize);
+
+        // Collect all quizzes with their details
+        const allQuizzes: any[] = [];
+        sessions.forEach((session) => {
+            session.sisyaClassQuizzes.forEach((quiz) => {
+                const totalResponses = quiz.responses.length;
+                const correctResponses = quiz.responses.filter((r) => r.isCorrect).length;
+                allQuizzes.push({
+                    id: quiz.id,
+                    quizId: quiz.quizId,
+                    sessionId: session.id,
+                    sessionDetail: session.detail,
+                    title: quiz.title,
+                    type: quiz.type,
+                    question: quiz.question,
+                    correctAnswer: quiz.correctAnswer,
+                    options: quiz.options,
+                    timerDuration: quiz.timerDuration,
+                    createdAt: quiz.createdAt,
+                    endedAt: quiz.endedAt,
+                    statistics: {
+                        totalResponses,
+                        correctResponses,
+                        incorrectResponses: totalResponses - correctResponses,
+                        accuracy: totalResponses > 0 ? (correctResponses / totalResponses) * 100 : 0,
+                    },
+                });
+            });
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                course: course,
+                totalSessions: sessions.length,
+                quizzes: {
+                    total: allQuizzes.length,
+                    details: allQuizzes,
+                },
+                leaderboard: paginatedLeaderboard,
+                pagination: {
+                    total: leaderboard.length,
+                    page: pageNumber,
+                    limit: pageSize,
+                    totalPages: Math.ceil(leaderboard.length / pageSize),
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching course leaderboard:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+}

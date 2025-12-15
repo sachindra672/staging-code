@@ -5,7 +5,7 @@ import { Request, Response } from "express";
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import * as jwt from 'jsonwebtoken';
 
-import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2 } from './UserFuncs';
+import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2, GetUserIdByUuid } from './UserFuncs';
 import { authenticateTokenUser, downlinkMessage, getRedisContents, prisma, SECRET, sendMsgx, uploadImage } from './misc';
 import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2 } from './mentor';
 import { GetCoursesByGrade, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
@@ -33,6 +33,7 @@ import {
   getRewardBudget,
   setUserRewardLimit,
   getUserRewardLimits,
+  getMyRewardLimits,
 } from './sisyacoin/rewardBudgetController';
 import {
   grantManualReward,
@@ -49,12 +50,15 @@ import {
   getMyTransactions,
   getTransactionById,
   getWalletTransactions,
+  getThisWeekTransactions,
+  getTodayTransactions,
 } from './sisyacoin/transactionController';
 import {
   getStoreItems,
   createStoreItem,
   updateStoreItem,
   createOrder as createStoreOrder,
+  createOrder2 as createStoreOrder2,
   getMyOrders,
   getOrderById,
   refundOrder,
@@ -116,9 +120,9 @@ import { genUserToken } from './userGenToken';
 import { abortS3upload, completeS3upload, getS3uploadUrl, initS3upload } from './awsUploadRecording';
 import { getSignedUrlAws, getSignedUrlGcp, updateRecordingUrl } from './recordings';
 import { addQuizWithQuestions, quizQuestionResponse } from './quiz';
-import { getAllQuizzes, getQuizWithStats, createQuiz, submitQuizResponse, endQuiz } from './sisyaQuiz';
+import { getAllQuizzes, getQuizWithStats, createQuiz, submitQuizResponse, endQuiz, getLeaderboardBySession, getLeaderboardByDay, getLeaderboardByCourse } from './sisyaQuiz';
 import { addGroupMemberEndpoint, createGroupEndpoint, deleteMessage, getAllGroupsAdmin, getGroupMessages, getMentorGroups, getNameByType, getReadReciept, getRecentMessagesGroup, getStudentGroups, markReadGroupMessage, sendGroupMessage, updateGroupType } from './courseGroupChat';
-import { addSessionAnalytics, getAllAnalyticsData, getAllAnalyticsData2, getAllAnalyticsData3, getCourseFeedback, getFeedbackStatus, getStudentCourseAttendance, postStudentDailyAnalytics, submitFeedback, testMail } from './sessionAnalytics';
+import { addSessionAnalytics, addSessionAnalytics2, getAllAnalyticsData, getAllAnalyticsData2, getAllAnalyticsData3, getCourseFeedback, getFeedbackStatus, getStudentCourseAttendance, postStudentDailyAnalytics, submitFeedback, testMail } from './sessionAnalytics';
 
 import testRoutes from './routes/test.route'
 
@@ -325,8 +329,13 @@ app.post("/teacher/get_all_quizzes", authMentor, getAllQuizzes)
 app.get("/teacher/quiz/:quizId/stats", authMentor, getQuizWithStats)
 app.post("/teacher/create_quiz", authMentor, createQuiz)
 app.post("/teacher/end_quiz", authMentor, endQuiz)
+// Leaderboard routes
+app.post("/leaderboard/session", authAnyone, getLeaderboardBySession)
+app.post("/leaderboard/day", authAnyone, getLeaderboardByDay)
+app.post("/leaderboard/course", authAnyone, getLeaderboardByCourse)
 app.get('/teacher/groups/:mentorId', authMentor, getMentorGroups)
 app.post('/teacher/add_session_analytics', authMentor, addSessionAnalytics);
+app.post('/teacher/add_session_analytics2', authMentor, addSessionAnalytics2);
 app.post("/teacher/get_bg_course_by_id", authMentor, GetBigCoursesById)
 app.post("/teacher/get_materials_with_time", authMentor, getMaterialFilesListwithTime)
 app.post("/teacher/upload_course_material", authMentor, UploadCourseMaterials)
@@ -579,6 +588,7 @@ app.post("/get_materials", authUser, getMaterialFilesList)
 app.post("/get_materials_with_time", authUser, getMaterialFilesListwithTime)
 app.post("/get_user_notifications", authUser, GetUserNotifications)
 app.post("/get_my_profile", authUser, GetUserById)
+app.post("/get_my_id_from_uuid", GetUserIdByUuid)
 app.post("/get_subject_by_id", authUser, GetSubjectById)
 app.post("/get_stream_info", authUser, getStreamInfo)
 app.post("/get_my_purchases2", authUser, getMyPurchases2)
@@ -757,7 +767,7 @@ app.get("/admin/sisyacoin/rates", authAdmin, getRates);
 app.put("/admin/sisyacoin/rates/:id", authAdmin, updateRate);
 
 // Reward limits (role-level)
-app.put("/admin/sisyacoin/reward-limits/role/:ownerType", authAdmin, setRoleRewardLimit);
+app.put("/admin/sisyacoin/reward-limits/role", authAdmin, setRoleRewardLimit);
 app.get("/admin/sisyacoin/reward-limits/roles", authAdmin, getRoleRewardLimits);
 
 // Reward budgets & user-level limits
@@ -767,12 +777,15 @@ app.get("/admin/sisyacoin/reward-budgets/:ownerType/:ownerId", authAdmin, getRew
 app.put("/admin/sisyacoin/reward-limits/users/:walletId", authAdmin, setUserRewardLimit);
 app.get("/admin/sisyacoin/reward-limits/users", authAdmin, getUserRewardLimits);
 
+// Mentor/Salesman: Get their own reward limits
+app.post("/teacher/sisyacoin/reward-limits/me", authMentor, getMyRewardLimits);
+
 // Manual rewards
-app.post("/sisyacoin/rewards/manual", authMentor, grantManualReward);
-app.get("/sisyacoin/rewards/manual/given", authMentor, getRewardsGiven);
+app.post("/teacher/sisyacoin/rewards/manual", authMentor, grantManualReward);
+app.get("/teacher/sisyacoin/rewards/manual/given", authMentor, getRewardsGiven);
 app.get("/sisyacoin/rewards/manual/received", authUser, getRewardsReceived);
 
-// Task rewards (automatic rewards for homework, tests, etc.)
+// Task rewards 
 app.post("/sisyacoin/rewards/task", grantTaskReward); // No auth - called internally by system
 app.get("/sisyacoin/rewards/task/me", authUser, getMyTaskRewards);
 app.get("/sisyacoin/rewards/task/check", checkTaskReward); // Check if task already rewarded
@@ -780,14 +793,16 @@ app.get("/admin/sisyacoin/rewards/task", authAdmin, getAllTaskRewards);
 
 // Transactions
 app.get("/sisyacoin/transactions/me", authAnyone, getMyTransactions);
+app.get("/sisyacoin/transactions/today", authAnyone, getTodayTransactions);
+app.get("/sisyacoin/transactions/week", authAnyone, getThisWeekTransactions);
 app.get("/sisyacoin/transactions/:id", authAnyone, getTransactionById);
 app.get("/sisyacoin/admin/wallets/:walletId/transactions", authAdmin, getWalletTransactions);
 
 // Store
 app.get("/sisyacoin/store/items", authAnyone, getStoreItems);
 app.post("/admin/sisyacoin/store/items", authAdmin, createStoreItem);
-app.put("/admin/sisyacoin/store/items/:id", authAdmin, updateStoreItem);
-app.post("/sisyacoin/store/orders", authUser, createStoreOrder);
+app.put("/admin/sisyacoin/store/items", authAdmin, updateStoreItem);
+app.post("/sisyacoin/store/orders", authUser, createStoreOrder2);
 app.get("/sisyacoin/store/orders/me", authUser, getMyOrders);
 app.get("/sisyacoin/store/orders/:id", authAnyone, getOrderById);
 app.post("/admin/sisyacoin/store/orders/:id/refund", authAdmin, refundOrder);

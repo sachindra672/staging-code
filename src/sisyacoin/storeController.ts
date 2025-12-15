@@ -82,7 +82,7 @@ export async function createStoreItem(req: Request, res: Response) {
 // Admin: Update store item
 export async function updateStoreItem(req: Request, res: Response) {
     try {
-        const { id,name, description, imageUrl, priceCoins, originalCoins, stock, category, metadata, isActive } = req.body;
+        const { id, name, description, imageUrl, priceCoins, originalCoins, stock, category, metadata, isActive } = req.body;
 
         const updateData: any = {};
         if (name !== undefined) updateData.name = name;
@@ -269,9 +269,10 @@ export async function createOrder(req: Request, res: Response) {
                 "PURCHASE_ITEM",
                 orderItem.priceAtPurchase.times(orderItem.quantity).negated(),
                 "SPENDABLE",
-                wallet.spendableBalance, 
+                wallet.spendableBalance,
                 wallet.spendableBalance.minus(orderItem.priceAtPurchase.times(orderItem.quantity)),
                 {
+                    reason: `Item purchased: ${orderItem.item.name}`,
                     orderId: order.id,
                     itemId: orderItem.itemId,
                     itemName: orderItem.item.name,
@@ -286,6 +287,295 @@ export async function createOrder(req: Request, res: Response) {
         });
     } catch (error) {
         console.error("Error creating order:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+}
+
+export async function createOrder2(req: Request, res: Response) {
+    try {
+        const { items, address } = req.body; // [{ itemId, quantity }], address (optional)
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "items array is required"
+            });
+        }
+
+        const { userId } = req.body;
+        const role = req.role;
+
+        if (role !== "user") {
+            return res.status(403).json({
+                success: false,
+                message: "Only end users can create orders"
+            });
+        }
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "userId is required in request body" });
+        }
+
+        const endUser = await prisma.endUsers.findFirst({
+            where: {
+                OR: [
+                    { id: typeof userId === 'number' ? userId : parseInt(userId) || 0 },
+                    { phone: typeof userId === 'string' ? userId : String(userId) }
+                ]
+            },
+            select: { id: true }
+        });
+
+        if (!endUser) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const wallet = await ensureWallet("ENDUSER", endUser.id);
+
+        // Validate items and calculate total (read-only operations, no side effects)
+        let totalCoins = new Decimal(0);
+        const orderItems: Array<{ itemId: string; quantity: number; priceAtPurchase: Decimal; itemName: string }> = [];
+
+        for (const itemReq of items) {
+            const { itemId, quantity } = itemReq;
+
+            if (!itemId || !quantity || quantity <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Each item must have itemId and positive quantity"
+                });
+            }
+
+            const item = await prisma.sisyaStoreItem.findUnique({
+                where: { id: itemId }
+            });
+
+            if (!item || !item.isActive) {
+                return res.status(404).json({
+                    success: false,
+                    message: `Item ${itemId} not found or inactive`
+                });
+            }
+
+            if (item.stock < quantity) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Insufficient stock for item ${item.name}. Available: ${item.stock}, Requested: ${quantity}`
+                });
+            }
+
+            const itemTotal = item.priceCoins.times(quantity);
+            totalCoins = totalCoins.plus(itemTotal);
+
+            orderItems.push({
+                itemId,
+                quantity,
+                priceAtPurchase: item.priceCoins,
+                itemName: item.name
+            });
+        }
+
+        // Check wallet balance (including expiring balances) - read-only
+        const expiringBalances = await prisma.sisyaExpiryBalance.findMany({
+            where: {
+                walletId: wallet.id,
+                isExpired: false,
+                expiresAt: { gt: new Date() }
+            }
+        });
+
+        const totalExpiringAvailable = expiringBalances.reduce(
+            (sum, eb) => sum.plus(eb.amountTotal.minus(eb.amountUsed).minus(eb.amountExpired)),
+            new Decimal(0)
+        );
+
+        const totalAvailable = wallet.spendableBalance.plus(totalExpiringAvailable);
+
+        if (totalAvailable.lt(totalCoins)) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient balance",
+                required: totalCoins.toString(),
+                available: totalAvailable.toString()
+            });
+        }
+
+        // All database writes wrapped in transaction
+        const order = await prisma.$transaction(async (tx) => {
+            // Re-check stock within transaction (optimistic locking)
+            for (const oi of orderItems) {
+                const item = await tx.sisyaStoreItem.findUnique({
+                    where: { id: oi.itemId },
+                    select: { stock: true }
+                });
+
+                if (!item || item.stock < oi.quantity) {
+                    throw new Error(`Insufficient stock for item ${oi.itemId}. Available: ${item?.stock || 0}, Requested: ${oi.quantity}`);
+                }
+            }
+
+            // Get fresh wallet data within transaction
+            const walletInTx = await tx.sisyaWallet.findUnique({
+                where: { id: wallet.id }
+            });
+
+            if (!walletInTx) {
+                throw new Error("Wallet not found");
+            }
+
+            // Re-check balance within transaction
+            const expiringBalancesInTx = await tx.sisyaExpiryBalance.findMany({
+                where: {
+                    walletId: wallet.id,
+                    isExpired: false,
+                    expiresAt: { gt: new Date() }
+                }
+            });
+
+            const totalExpiringAvailableInTx = expiringBalancesInTx.reduce(
+                (sum, eb) => sum.plus(eb.amountTotal.minus(eb.amountUsed).minus(eb.amountExpired)),
+                new Decimal(0)
+            );
+
+            const totalAvailableInTx = walletInTx.spendableBalance.plus(totalExpiringAvailableInTx);
+
+            if (totalAvailableInTx.lt(totalCoins)) {
+                throw new Error("Insufficient balance");
+            }
+
+            // Spend coins - expiry first logic within transaction
+            let remaining = totalCoins;
+            let expiryUsed = new Decimal(0);
+            let normalUsed = new Decimal(0);
+
+            // Use expiring balances first
+            for (const expBal of expiringBalancesInTx) {
+                if (remaining.lte(0)) break;
+
+                const available = expBal.amountTotal.minus(expBal.amountUsed).minus(expBal.amountExpired);
+                if (available.lte(0)) continue;
+
+                const toUse = Decimal.min(remaining, available);
+                const newAmountUsed = expBal.amountUsed.plus(toUse);
+
+                await tx.sisyaExpiryBalance.update({
+                    where: { id: expBal.id },
+                    data: { amountUsed: newAmountUsed }
+                });
+
+                expiryUsed = expiryUsed.plus(toUse);
+                remaining = remaining.minus(toUse);
+            }
+
+            // Use normal spendable balance for remainder
+            if (remaining.gt(0)) {
+                if (walletInTx.spendableBalance.lt(remaining)) {
+                    throw new Error("Insufficient spendable balance");
+                }
+                normalUsed = remaining;
+            }
+
+            // Update wallet balance
+            const balanceBefore = walletInTx.spendableBalance;
+            const balanceAfter = balanceBefore.minus(normalUsed);
+
+            await tx.sisyaWallet.update({
+                where: { id: wallet.id },
+                data: {
+                    spendableBalance: balanceAfter,
+                    totalSpent: walletInTx.totalSpent.plus(totalCoins)
+                }
+            });
+
+            // Create order first to get order ID for transaction metadata
+            const orderData: any = {
+                walletId: wallet.id,
+                ownerType: "ENDUSER",
+                ownerId: endUser.id,
+                totalCoins,
+                status: "COMPLETED",
+                completedAt: new Date(),
+                items: {
+                    create: orderItems.map(oi => ({
+                        itemId: oi.itemId,
+                        quantity: oi.quantity,
+                        priceAtPurchase: oi.priceAtPurchase
+                    }))
+                }
+            };
+
+            if (address !== undefined) {
+                orderData.address = address;
+            }
+
+            const newOrder = await tx.sisyaStoreOrder.create({
+                data: orderData,
+                include: {
+                    items: {
+                        include: {
+                            item: true
+                        }
+                    }
+                }
+            });
+
+            // Update item stock
+            for (const oi of orderItems) {
+                await tx.sisyaStoreItem.update({
+                    where: { id: oi.itemId },
+                    data: {
+                        stock: { decrement: oi.quantity }
+                    }
+                });
+            }
+
+            // Create single main purchase transaction with all item details in metadata
+            const itemsSummary = orderItems.map(oi => `${oi.quantity}x ${oi.itemName}`).join(", ");
+            const itemsDetails = newOrder.items.map(item => ({
+                itemId: item.itemId,
+                itemName: item.item.name,
+                quantity: item.quantity,
+                priceAtPurchase: item.priceAtPurchase.toString()
+            }));
+
+            await tx.sisyaTransaction.create({
+                data: {
+                    walletId: wallet.id,
+                    type: "PURCHASE",
+                    status: "COMPLETED",
+                    amount: totalCoins.negated(),
+                    fee: new Decimal(0),
+                    balanceBefore,
+                    balanceAfter,
+                    balanceType: "SPENDABLE",
+                    metadata: {
+                        reason: `Store order: ${itemsSummary}`,
+                        orderId: newOrder.id,
+                        items: itemsDetails,
+                        expiryUsed: expiryUsed.toString(),
+                        normalUsed: normalUsed.toString()
+                    }
+                }
+            });
+
+            return newOrder;
+        });
+
+        return res.json({
+            success: true,
+            data: order
+        });
+    } catch (error: any) {
+        console.error("Error creating order:", error);
+
+        // Handle transaction-specific errors
+        if (error.message?.includes("Insufficient stock") || error.message?.includes("Insufficient balance")) {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 }
