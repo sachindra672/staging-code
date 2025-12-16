@@ -782,6 +782,8 @@ model ctest {
   bigCourseId     Int
   subjectId       Int
   mentorId        Int
+  mode            CTestMode         @default(MCQ)
+  totalMarks      Int?
   createdOn       DateTime          @default(now())
   modifiedOn      DateTime          @default(now())
   cTestResponse   cTestResponse[]
@@ -789,6 +791,7 @@ model ctest {
   mentor          mentor            @relation(fields: [mentorId], references: [id])
   subject         Subject           @relation(fields: [subjectId], references: [id])
   ctestQuestions  ctestQuestions[]
+  imageQuestions  ctestImageQuestion[]
   ctestSubmission ctestSubmission[]
 }
 
@@ -820,9 +823,17 @@ model ctestSubmission {
   endUsersId    Int
   createdOn     DateTime        @default(now())
   modifiedOn    DateTime        @default(now())
+  status        CTestSubmissionStatus @default(IN_PROGRESS)
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  gradedBy      Int?
+  totalMarks    Int?
+  awardedMarks  Int?
+  gradingNote   String?
   cTestResponse cTestResponse[]
   ctest         ctest           @relation(fields: [ctestId], references: [id])
   user          endUsers        @relation(fields: [endUsersId], references: [id])
+  imageAnswers  ctestImageAnswer[]
 }
 
 model cTestResponse {
@@ -840,6 +851,41 @@ model cTestResponse {
   forQuestion       ctestQuestions  @relation(fields: [ctestQuestionsId], references: [id])
   submission        ctestSubmission @relation(fields: [ctestSubmissionId], references: [id])
   createdBy         endUsers        @relation(fields: [endUsersId], references: [id])
+}
+
+model ctestImageQuestion {
+  id               Int      @id @default(autoincrement())
+  ctestId          Int
+  prompt           String?
+  instructions     String?
+  questionImages   String[] @default([])
+  maxMarks         Int
+  maxAnswerImages  Int      @default(5)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  test             ctest    @relation(fields: [ctestId], references: [id])
+  answers          ctestImageAnswer[]
+}
+
+model ctestImageAnswer {
+  id            Int      @id @default(autoincrement())
+  submissionId  Int
+  questionId    Int
+  answerImages  String[] @default([])
+  notes         String?
+  awardedMarks  Int?
+  reviewedBy    Int?
+  reviewedAt    DateTime?
+  reviewComment String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  submission    ctestSubmission @relation(fields: [submissionId], references: [id])
+  question      ctestImageQuestion @relation(fields: [questionId], references: [id])
+
+  @@unique([submissionId, questionId])
+  @@index([submissionId])
+  @@index([questionId])
 }
 
 model subjectRecord {
@@ -1502,6 +1548,17 @@ enum qtype {
   multipleChoice
   trueFalse
   subjective
+}
+
+enum CTestMode {
+  MCQ
+  IMAGE
+}
+
+enum CTestSubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
 }
 
 enum GroupType {

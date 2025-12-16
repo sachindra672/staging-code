@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { grantTaskReward } from './sisyacoin/taskRewardController'
 import { getSystemWallet } from './config/sisyacoinHelperFunctions'
 import { Decimal } from "@prisma/client/runtime/library";
+import { CTestMode, CTestSubmissionStatus } from '@prisma/client';
 
 const storage = new Storage({
     projectId: process.env.GCP_PROJECT_ID,
@@ -13,6 +14,63 @@ const storage = new Storage({
 });
 
 const bucket = storage.bucket(process.env.GCP_BUCKET!);
+
+type ImageQuestionInput = {
+    prompt?: string
+    instructions?: string
+    questionImages?: string[]
+    maxMarks: number
+    maxAnswerImages?: number
+    sortOrder?: number
+}
+
+type McqQuestionInput = {
+    question: string
+    type: 'multipleChoice' | 'trueFalse' | 'subjective'
+    option1?: string
+    option2?: string
+    option3?: string
+    option4?: string
+    correctResponse?: number
+    maxWords?: number
+    allowAttachments?: boolean
+}
+
+type CreateCtestPayload = {
+    title: string
+    startDate: string
+    endDate: string
+    bigCourseId: number
+    subjectId: number
+    mentorId: number
+    ctestQuestions?: McqQuestionInput[]
+    imageQuestions?: ImageQuestionInput[]
+    mode?: CTestMode
+    totalMarks?: number
+}
+
+type UpdateCtestPayload = CreateCtestPayload & {
+    ctestId: number
+}
+
+const normalizeCTestMode = (value: unknown): CTestMode | null => {
+    if (value === undefined || value === null) {
+        return CTestMode.MCQ;
+    }
+
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const normalized = value.toUpperCase() as CTestMode;
+    return Object.values(CTestMode).includes(normalized) ? normalized : null;
+}
+
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+const deriveImageTotalMarks = (questions: ImageQuestionInput[]): number => {
+    return questions.reduce((sum, q) => sum + (typeof q.maxMarks === 'number' ? q.maxMarks : 0), 0);
+}
 
 export const generateCtestAttachmentUploadUrl = async (req: Request, res: Response) => {
     try {
@@ -156,8 +214,11 @@ export async function createCtest2(req: Request, res: Response) {
             bigCourseId,
             subjectId,
             mentorId,
-            ctestQuestions
-        } = req.body;
+            ctestQuestions,
+            imageQuestions,
+            mode,
+            totalMarks,
+        } = req.body as CreateCtestPayload;
 
         if (!title || typeof title !== 'string') {
             return res.status(400).json({ error: 'Invalid or missing title' });
@@ -184,61 +245,115 @@ export async function createCtest2(req: Request, res: Response) {
             return res.status(400).json({ error: 'Missing required IDs' });
         }
 
-        if (!Array.isArray(ctestQuestions) || ctestQuestions.length === 0) {
-            return res.status(400).json({ error: 'Invalid or missing ctestQuestions' });
+        const resolvedMode = normalizeCTestMode(mode);
+        if (!resolvedMode) {
+            return res.status(400).json({ error: 'Invalid ctest mode' });
         }
 
-        for (const q of ctestQuestions) {
-            if (!q.question || typeof q.question !== 'string') {
-                return res.status(400).json({ error: 'Invalid question text' });
+        const isImageMode = resolvedMode === CTestMode.IMAGE;
+        let imageQuestionList: ImageQuestionInput[] = [];
+        let mcqQuestionList: McqQuestionInput[] = [];
+
+        if (isImageMode) {
+            if (!Array.isArray(imageQuestions) || imageQuestions.length === 0) {
+                return res.status(400).json({ error: 'Image mode requires imageQuestions array' });
             }
 
-            if (!['multipleChoice', 'trueFalse', 'subjective'].includes(q.type)) {
-                return res.status(400).json({ error: 'Invalid question type' });
-            }
-
-            if (q.type !== 'subjective') {
-                if (!q.option1 || !q.option2) {
-                    return res.status(400).json({ error: 'MCQ requires minimum two options' });
+            for (const [index, question] of imageQuestions.entries()) {
+                if (!question || typeof question !== 'object') {
+                    return res.status(400).json({ error: `Invalid image question payload at index ${index}` });
                 }
-                if (!q.correctResponse) {
-                    return res.status(400).json({ error: 'MCQ requires correctResponse' });
+
+                if (typeof question.maxMarks !== 'number' || question.maxMarks <= 0) {
+                    return res.status(400).json({ error: `maxMarks must be > 0 for image question at index ${index}` });
+                }
+
+                if (question.questionImages && !isStringArray(question.questionImages)) {
+                    return res.status(400).json({ error: `questionImages must be an array of strings at index ${index}` });
+                }
+
+                if (question.maxAnswerImages !== undefined && (typeof question.maxAnswerImages !== 'number' || question.maxAnswerImages <= 0)) {
+                    return res.status(400).json({ error: `maxAnswerImages must be a positive number at index ${index}` });
                 }
             }
 
-            if (q.type === 'subjective') {
-                // Subjective fields are optional but supported
-                // Correct response is NOT required
+            imageQuestionList = imageQuestions as ImageQuestionInput[];
+        } else {
+            if (!Array.isArray(ctestQuestions) || ctestQuestions.length === 0) {
+                return res.status(400).json({ error: 'MCQ mode requires ctestQuestions array' });
             }
+
+            for (const q of ctestQuestions) {
+                if (!q.question || typeof q.question !== 'string') {
+                    return res.status(400).json({ error: 'Invalid question text' });
+                }
+
+                if (!['multipleChoice', 'trueFalse', 'subjective'].includes(q.type)) {
+                    return res.status(400).json({ error: 'Invalid question type' });
+                }
+
+                if (q.type !== 'subjective') {
+                    if (!q.option1 || !q.option2) {
+                        return res.status(400).json({ error: 'MCQ requires minimum two options' });
+                    }
+                    if (!q.correctResponse) {
+                        return res.status(400).json({ error: 'MCQ requires correctResponse' });
+                    }
+                }
+            }
+
+            mcqQuestionList = ctestQuestions as McqQuestionInput[];
+        }
+
+        const derivedTotalMarks = typeof totalMarks === 'number' && totalMarks > 0
+            ? totalMarks
+            : isImageMode
+                ? deriveImageTotalMarks(imageQuestionList)
+                : mcqQuestionList.length;
+
+        const createData: any = {
+            title,
+            Duration: durationMinutes,
+            startDate: start,
+            endDate: end,
+            bigCourseId,
+            subjectId,
+            mentorId,
+            mode: resolvedMode,
+            totalMarks: derivedTotalMarks || null,
+        };
+
+        if (isImageMode) {
+            createData.imageQuestions = {
+                create: imageQuestionList.map((question: ImageQuestionInput, index: number) => ({
+                    prompt: question.prompt ?? null,
+                    instructions: question.instructions ?? null,
+                    questionImages: question.questionImages ?? [],
+                    maxMarks: question.maxMarks,
+                    maxAnswerImages: question.maxAnswerImages ?? 5,
+                    sortOrder: question.sortOrder ?? index,
+                })),
+            };
+        } else {
+            createData.ctestQuestions = {
+                create: mcqQuestionList.map((q: McqQuestionInput) => ({
+                    question: q.question,
+                    type: q.type,
+                    option1: q.option1 || null,
+                    option2: q.option2 || null,
+                    option3: q.option3 || null,
+                    option4: q.option4 || null,
+                    correctResponse: q.type === 'subjective' ? 0 : q.correctResponse,
+                    isSubjective: q.type === 'subjective',
+                    maxWords: q.maxWords || null,
+                    allowAttachments: q.allowAttachments ?? false,
+                })),
+            };
         }
 
         const newCtest = await prisma.ctest.create({
-            data: {
-                title,
-                Duration: durationMinutes,
-                startDate: start,
-                endDate: end,
-                bigCourseId,
-                subjectId,
-                mentorId,
-                ctestQuestions: {
-                    create: ctestQuestions.map((q) => ({
-                        question: q.question,
-                        type: q.type,
-                        option1: q.option1 || null,
-                        option2: q.option2 || null,
-                        option3: q.option3 || null,
-                        option4: q.option4 || null,
-                        correctResponse: q.type === 'subjective' ? 0 : q.correctResponse,
-
-                        // subjective support
-                        isSubjective: q.type === 'subjective',
-                        maxWords: q.maxWords || null,
-                        allowAttachments: q.allowAttachments ?? false,
-                    })),
-                },
-            },
-            include: { ctestQuestions: true },
+            data: createData,
+            include: { ctestQuestions: true, imageQuestions: true },
         });
 
         res.status(201).json({ success: true, newCtest });
@@ -372,7 +487,10 @@ export async function editCtest2(req: Request, res: Response) {
             subjectId,
             mentorId,
             ctestQuestions,
-        } = req.body;
+            imageQuestions,
+            mode,
+            totalMarks,
+        } = req.body as UpdateCtestPayload;
 
         if (!ctestId) {
             return res.status(400).json({ error: 'Missing ctestId' });
@@ -382,41 +500,121 @@ export async function editCtest2(req: Request, res: Response) {
         const end = new Date(endDate);
         const durationMinutes = Math.floor((end.getTime() - start.getTime()) / (1000 * 60));
 
-        if (!Array.isArray(ctestQuestions)) {
-            return res.status(400).json({ error: 'Invalid ctestQuestions' });
+        const resolvedMode = normalizeCTestMode(mode);
+        if (!resolvedMode) {
+            return res.status(400).json({ error: 'Invalid ctest mode' });
         }
 
-        // delete old questions
+        const isImageMode = resolvedMode === CTestMode.IMAGE;
+        let imageQuestionList: ImageQuestionInput[] = [];
+        let mcqQuestionList: McqQuestionInput[] = [];
+
+        if (isImageMode) {
+            if (!Array.isArray(imageQuestions) || imageQuestions.length === 0) {
+                return res.status(400).json({ error: 'Image mode requires imageQuestions array' });
+            }
+
+            for (const [index, question] of imageQuestions.entries()) {
+                if (!question || typeof question !== 'object') {
+                    return res.status(400).json({ error: `Invalid image question payload at index ${index}` });
+                }
+
+                if (typeof question.maxMarks !== 'number' || question.maxMarks <= 0) {
+                    return res.status(400).json({ error: `maxMarks must be > 0 for image question at index ${index}` });
+                }
+
+                if (question.questionImages && !isStringArray(question.questionImages)) {
+                    return res.status(400).json({ error: `questionImages must be an array of strings at index ${index}` });
+                }
+
+                if (question.maxAnswerImages !== undefined && (typeof question.maxAnswerImages !== 'number' || question.maxAnswerImages <= 0)) {
+                    return res.status(400).json({ error: `maxAnswerImages must be a positive number at index ${index}` });
+                }
+            }
+
+            imageQuestionList = imageQuestions as ImageQuestionInput[];
+        } else {
+            if (!Array.isArray(ctestQuestions)) {
+                return res.status(400).json({ error: 'Invalid ctestQuestions' });
+            }
+
+            for (const q of ctestQuestions) {
+                if (!q.question || typeof q.question !== 'string') {
+                    return res.status(400).json({ error: 'Invalid question text' });
+                }
+
+                if (!['multipleChoice', 'trueFalse', 'subjective'].includes(q.type)) {
+                    return res.status(400).json({ error: 'Invalid question type' });
+                }
+
+                if (q.type !== 'subjective') {
+                    if (!q.option1 || !q.option2) {
+                        return res.status(400).json({ error: 'MCQ requires minimum two options' });
+                    }
+                    if (!q.correctResponse) {
+                        return res.status(400).json({ error: 'MCQ requires correctResponse' });
+                    }
+                }
+            }
+
+            mcqQuestionList = ctestQuestions as McqQuestionInput[];
+        }
+
+        // delete old questions of both types
         await prisma.ctestQuestions.deleteMany({ where: { ctestId } });
+        await prisma.ctestImageQuestion.deleteMany({ where: { ctestId } });
+
+        const derivedTotalMarks = typeof totalMarks === 'number' && totalMarks > 0
+            ? totalMarks
+            : isImageMode
+                ? deriveImageTotalMarks(imageQuestionList)
+                : mcqQuestionList.length;
+
+        const updateData: any = {
+            title,
+            startDate: start,
+            endDate: end,
+            Duration: durationMinutes,
+            bigCourseId,
+            subjectId,
+            mentorId,
+            modifiedOn: new Date(),
+            mode: resolvedMode,
+            totalMarks: derivedTotalMarks || null,
+        };
+
+        if (isImageMode) {
+            updateData.imageQuestions = {
+                create: imageQuestionList.map((question: ImageQuestionInput, index: number) => ({
+                    prompt: question.prompt ?? null,
+                    instructions: question.instructions ?? null,
+                    questionImages: question.questionImages ?? [],
+                    maxMarks: question.maxMarks,
+                    maxAnswerImages: question.maxAnswerImages ?? 5,
+                    sortOrder: question.sortOrder ?? index,
+                })),
+            };
+        } else {
+            updateData.ctestQuestions = {
+                create: mcqQuestionList.map((q: McqQuestionInput) => ({
+                    question: q.question,
+                    type: q.type,
+                    option1: q.option1 || null,
+                    option2: q.option2 || null,
+                    option3: q.option3 || null,
+                    option4: q.option4 || null,
+                    correctResponse: q.type === 'subjective' ? 0 : q.correctResponse,
+                    isSubjective: q.type === 'subjective',
+                    maxWords: q.maxWords || null,
+                    allowAttachments: q.allowAttachments ?? false,
+                })),
+            };
+        }
 
         const updated = await prisma.ctest.update({
             where: { id: ctestId },
-            data: {
-                title,
-                startDate: start,
-                endDate: end,
-                Duration: durationMinutes,
-                bigCourseId,
-                subjectId,
-                mentorId,
-                modifiedOn: new Date(),
-                ctestQuestions: {
-                    create: ctestQuestions.map((q) => ({
-                        question: q.question,
-                        type: q.type,
-                        option1: q.option1 || null,
-                        option2: q.option2 || null,
-                        option3: q.option3 || null,
-                        option4: q.option4 || null,
-                        correctResponse: q.type === 'subjective' ? 0 : q.correctResponse,
-
-                        isSubjective: q.type === 'subjective',
-                        maxWords: q.maxWords || null,
-                        allowAttachments: q.allowAttachments ?? false,
-                    })),
-                },
-            },
-            include: { ctestQuestions: true },
+            data: updateData,
+            include: { ctestQuestions: true, imageQuestions: true },
         });
 
         res.json({ success: true, updated });
@@ -440,7 +638,7 @@ export async function GetCtests(req: Request, res: Response) {
     try {
         const ctests = await prisma.ctest.findMany({
             where: { bigCourseId },
-            include: { ctestQuestions: true }
+            include: { ctestQuestions: true, imageQuestions: true }
         });
 
         res.status(200).json({ success: true, ctests });
@@ -712,9 +910,12 @@ export async function GetMyCtestSubmission(req: Request, res: Response) {
             where: { endUsersId, ctestId },
             include: {
                 ctest: {
-                    include: { ctestQuestions: true },
+                    include: { ctestQuestions: true, imageQuestions: true },
                 },
-                cTestResponse: true
+                cTestResponse: true,
+                imageAnswers: {
+                    include: { question: true },
+                },
             }
         });
 
@@ -768,9 +969,12 @@ export async function GetMyBigCourseCtestSubmission(req: Request, res: Response)
             },
             include: {
                 ctest: {
-                    include: { ctestQuestions: true },
+                    include: { ctestQuestions: true, imageQuestions: true },
                 },
-                cTestResponse: true
+                cTestResponse: true,
+                imageAnswers: {
+                    include: { question: true },
+                },
             }
         });
 
@@ -801,7 +1005,9 @@ export const deleteCTest = async (req: Request, res: Response) => {
         }
 
         await prisma.cTestResponse.deleteMany({ where: { ctestId: id } });
+        await prisma.ctestImageAnswer.deleteMany({ where: { submission: { ctestId: id } } });
         await prisma.ctestSubmission.deleteMany({ where: { ctestId: id } });
+        await prisma.ctestImageQuestion.deleteMany({ where: { ctestId: id } });
         await prisma.ctestQuestions.deleteMany({ where: { ctestId: id } });
 
         await prisma.ctest.delete({ where: { id } });

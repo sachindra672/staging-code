@@ -54,6 +54,32 @@ import {
   getTodayTransactions,
 } from './sisyacoin/transactionController';
 import {
+  getAllTransactionsAdmin,
+  getTransactionAnalytics,
+  getAllAuditLogsAdmin,
+  getAuditLogById,
+  getAuditLogStats,
+} from './sisyacoin/adminController';
+import {
+  getAllStoreItemsAdmin,
+  getStoreItemByIdAdmin,
+  deleteStoreItemAdmin,
+  bulkUpdateStock,
+  getAllOrdersAdmin,
+  cancelOrderAdmin,
+  updateOrderStatus,
+  getOrderStats,
+} from './sisyacoin/adminStoreController';
+import {
+  getAllManualRewardsGivenAdmin,
+  getAllManualRewardsReceivedAdmin,
+  getRewardStats,
+  getRewardBudgetAllocations,
+  getRewardBudgetUsage,
+  getAllUserRewardLimitsAdmin,
+  getRewardUsageStats,
+} from './sisyacoin/adminRewardController';
+import {
   getStoreItems,
   createStoreItem,
   updateStoreItem,
@@ -801,21 +827,50 @@ app.get("/sisyacoin/rewards/task/me", authUser, getMyTaskRewards);
 app.get("/sisyacoin/rewards/task/check", checkTaskReward); // Check if task already rewarded
 app.get("/admin/sisyacoin/rewards/task", authAdmin, getAllTaskRewards);
 
+// Admin Reward Management
+app.get("/admin/sisyacoin/rewards/manual/given", authAdmin, getAllManualRewardsGivenAdmin);
+app.get("/admin/sisyacoin/rewards/manual/received", authAdmin, getAllManualRewardsReceivedAdmin);
+app.get("/admin/sisyacoin/rewards/stats", authAdmin, getRewardStats);
+app.get("/admin/sisyacoin/rewards/budget/allocations", authAdmin, getRewardBudgetAllocations);
+app.get("/admin/sisyacoin/rewards/budget/usage", authAdmin, getRewardBudgetUsage);
+app.get("/admin/sisyacoin/rewards/limits/users", authAdmin, getAllUserRewardLimitsAdmin);
+app.get("/admin/sisyacoin/rewards/usage/stats", authAdmin, getRewardUsageStats);
+
 // Transactions
 app.get("/sisyacoin/transactions/me", authAnyone, getMyTransactions);
 app.get("/sisyacoin/transactions/today", authAnyone, getTodayTransactions);
 app.get("/sisyacoin/transactions/week", authAnyone, getThisWeekTransactions);
 app.get("/sisyacoin/transactions/:id", authAnyone, getTransactionById);
 app.get("/sisyacoin/admin/wallets/:walletId/transactions", authAdmin, getWalletTransactions);
+// Admin Transaction Management
+app.get("/admin/sisyacoin/transactions", authAdmin, getAllTransactionsAdmin);
+app.get("/admin/sisyacoin/transactions/analytics", authAdmin, getTransactionAnalytics);
+
+// Audit Logs
+app.get("/admin/sisyacoin/audit-logs", authAdmin, getAllAuditLogsAdmin);
+app.get("/admin/sisyacoin/audit-logs/:logId", authAdmin, getAuditLogById);
+app.get("/admin/sisyacoin/audit-logs/stats", authAdmin, getAuditLogStats);
 
 // Store
 app.get("/sisyacoin/store/items", authAnyone, getStoreItems);
 app.post("/admin/sisyacoin/store/items", authAdmin, createStoreItem);
 app.put("/admin/sisyacoin/store/items", authAdmin, updateStoreItem);
+// Admin Store Management
+app.get("/admin/sisyacoin/store/items/all", authAdmin, getAllStoreItemsAdmin);
+app.get("/admin/sisyacoin/store/items/:itemId", authAdmin, getStoreItemByIdAdmin);
+app.delete("/admin/sisyacoin/store/items/:itemId", authAdmin, deleteStoreItemAdmin);
+app.post("/admin/sisyacoin/store/items/bulk-stock", authAdmin, bulkUpdateStock);
+
+// Orders
 app.post("/sisyacoin/store/orders", authUser, createStoreOrder2);
 app.get("/sisyacoin/store/orders/me", authUser, getMyOrders);
 app.get("/sisyacoin/store/orders/:id", authAnyone, getOrderById);
 app.post("/admin/sisyacoin/store/orders/:id/refund", authAdmin, refundOrder);
+// Admin Order Management
+app.get("/admin/sisyacoin/store/orders", authAdmin, getAllOrdersAdmin);
+app.post("/admin/sisyacoin/store/orders/:id/cancel", authAdmin, cancelOrderAdmin);
+app.put("/admin/sisyacoin/store/orders/:id/status", authAdmin, updateOrderStatus);
+app.get("/admin/sisyacoin/store/orders/stats", authAdmin, getOrderStats);
 
 // Avatar store
 app.get("/sisyacoin/store/avatars", authAnyone, getAvatars);
@@ -832,7 +887,7 @@ app.get("/sisyacoin/fiat-purchases/me", authUser, getMyFiatPurchases);
 app.get("/admin/sisyacoin/fiat-purchases", authAdmin, getAllFiatPurchases);
 
 //general upload
-app.post("/general_upload_url",generateUploadUrl);
+app.post("/general_upload_url", generateUploadUrl);
 
 app.get("/info", function (_: Request, res: Response) {
   res.send(process.version)
