@@ -273,27 +273,42 @@ export async function uploadBanner(imageData: string | undefined, name: string, 
 }
 
 export async function uploadBanner2(imageData: string | undefined, name: string, final_dir: string): Promise<void> {
-    try {
-
-        if (imageData && imageData !== '') {
-            const imageBuffer = Buffer.from(imageData, 'base64');
-            const imageDir = path.join(__dirname, '../thumbs/banners/', final_dir);
-            const imagePath = path.join(imageDir, `${name.split(".")[0]}.jpg`);
-
-            fs.mkdirSync(imageDir, { recursive: true });
-
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
-
-            await sharp(imageBuffer)
-                .toFormat('jpeg')
-                .toFile(imagePath);
-        }
-    } catch (error) {
-        console.log(error)
+    if (!imageData || imageData === '') {
+        throw new Error(`Image data is required for file: ${name}`);
     }
 
+    try {
+        // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+        let base64Data = imageData;
+        if (base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1];
+        }
+
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+
+        // Validate buffer is not empty
+        if (imageBuffer.length === 0) {
+            throw new Error(`Invalid base64 data for file: ${name} - buffer is empty`);
+        }
+
+        const imageDir = path.join(__dirname, '../thumbs/banners/', final_dir);
+        const imagePath = path.join(imageDir, `${name.split(".")[0]}.jpg`);
+
+        fs.mkdirSync(imageDir, { recursive: true });
+
+        if (fs.existsSync(imagePath)) {
+            fs.unlinkSync(imagePath);
+        }
+
+        // Try to process image with sharp - this will throw if format is unsupported
+        await sharp(imageBuffer)
+            .toFormat('jpeg')
+            .toFile(imagePath);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[uploadBanner2] Failed to upload ${name}:`, errorMessage);
+        throw new Error(`Failed to upload banner "${name}": ${errorMessage}`);
+    }
 }
 
 

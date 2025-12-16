@@ -592,18 +592,24 @@ export async function updateBigCourse2(req: Request, res: Response) {
         });
         console.log(`[updateBigCourse] BigCourse updated successfully: ${updatedBigCourse.id}`);
 
-        if (imageData) {
+        // Only upload if valid image data is provided (preserves existing images if no data sent)
+        if (imageData && typeof imageData === 'string' && imageData.trim() !== '') {
             console.log(`[updateBigCourse] Uploading course image...`);
             await uploadImage(imageData, updatedBigCourse.id, "courses").catch(e =>
                 console.error(`[updateBigCourse] Error uploading imageData:`, e)
             );
+        } else {
+            console.log(`[updateBigCourse] No imageData provided, preserving existing image`);
         }
 
-        if (mainImageData) {
+        // Only upload if valid main image data is provided (preserves existing image if no data sent)
+        if (mainImageData && typeof mainImageData === 'string' && mainImageData.trim() !== '') {
             console.log(`[updateBigCourse] Uploading main course image...`);
             await uploadImage(mainImageData, updatedBigCourse.id, "mcourses").catch(e =>
                 console.error(`[updateBigCourse] Error uploading mainImageData:`, e)
             );
+        } else {
+            console.log(`[updateBigCourse] No mainImageData provided, preserving existing image`);
         }
 
         console.log(`[updateBigCourse] Processing TiArr (teach intros)... length:`, TiArr?.length);

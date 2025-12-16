@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url  = env("DATABASE_URL")
 }
 
 model endUsers {
@@ -1906,6 +1906,7 @@ model SisyaWallet {
   rewardUsage     SisyaRewardUsage[]
   rewardLimitUser SisyaRewardLimitUser?
   expiryBalances  SisyaExpiryBalance[] // TODO:- spend mai pahle expiry balance use karna h then use normal
+  avatarPurchases SisyaAvatarPurchase[]
 
   @@unique([ownerType, ownerId])
 }
@@ -2115,6 +2116,44 @@ model SisyaStoreItem {
   updatedAt DateTime @updatedAt
 
   orders SisyaStoreOrderItem[]
+}
+
+model SisyaAvatar {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+  imageUrl    String?
+
+  priceCoins    Decimal
+  originalCoins Decimal?
+
+  isActive  Boolean @default(true)
+  isLimited Boolean @default(false)
+  totalSupply Int?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases SisyaAvatarPurchase[]
+}
+
+model SisyaAvatarPurchase {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
+
+  avatarId String
+  avatar   SisyaAvatar @relation(fields: [avatarId], references: [id])
+
+  pricePaid   Decimal
+  purchasedAt DateTime @default(now())
+  metadata    Json?
+
+  @@unique([walletId, avatarId])
+  @@index([avatarId])
 }
 
 enum StoreOrderStatus {

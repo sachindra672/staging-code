@@ -40,6 +40,14 @@ import {
     refundOrder,
 } from "../sisyacoin/storeController";
 import {
+    getAvatars,
+    createAvatar,
+    updateAvatar,
+    purchaseAvatar,
+    getMyAvatars,
+    getAvatarPurchases,
+} from "../sisyacoin/avatarController";
+import {
     initiateFiatPurchase,
     handlePaymentWebhook,
     getMyFiatPurchases,
@@ -116,6 +124,14 @@ router.post("/store/orders", authUser, createOrder);
 router.get("/store/orders/me", authUser, getMyOrders);
 router.get("/store/orders/:id", authAnyone, getOrderById);
 router.post("/admin/store/orders/:id/refund", authAdmin, refundOrder);
+
+// Avatars
+router.get("/store/avatars", authAnyone, getAvatars);
+router.post("/admin/store/avatars", authAdmin, createAvatar);
+router.put("/admin/store/avatars/:id", authAdmin, updateAvatar);
+router.post("/store/avatars/purchase", authUser, purchaseAvatar);
+router.get("/store/avatars/me", authUser, getMyAvatars);
+router.get("/admin/store/avatar-purchases", authAdmin, getAvatarPurchases);
 
 // Fiat purchases
 router.post("/fiat-purchases", authUser, initiateFiatPurchase);

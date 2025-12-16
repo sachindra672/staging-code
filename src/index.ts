@@ -64,6 +64,14 @@ import {
   refundOrder,
 } from './sisyacoin/storeController';
 import {
+  getAvatars,
+  createAvatar,
+  updateAvatar,
+  purchaseAvatar,
+  getMyAvatars,
+  getAvatarPurchases,
+} from './sisyacoin/avatarController';
+import {
   initiateFiatPurchase,
   handlePaymentWebhook,
   getMyFiatPurchases,
@@ -90,7 +98,7 @@ import { getStudentAttendanceRecords, getStudentListBySession, insertAttendanceR
 import { InsertSessionTestQuestions, InsertSessionTests, InsertSessionTests2 } from './sessionTests';
 import { createSessionTestSubmission, createSessionTestSubmission2, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission } from './sessionTestSubmission';
 import { GetMyAttendanceProgressReport, sessionAttendanceList } from './studentProgressReport';
-import { AddMentor, createBigCourse, updateBigCourse } from './admin/adds';
+import { AddMentor, createBigCourse, updateBigCourse, updateBigCourse2 } from './admin/adds';
 import { GetAllCourses, GetAllMentors, GetPagedStudentList } from './admin/gets.';
 import { createCtest, createCtest2, createCtestSubmission, createCtestSubmission2, deleteCTest, editCtest, editCtest2, generateCtestAttachmentUploadUrl, GetAllCtestSubmissionsByCourse, GetCtests, GetMyBigCourseCtestSubmission, GetMyCtestSubmission } from './ctest';
 import { createMgSubscription, getMgSubscriptions, getMgSubscriptionsByStudent, getMgSubscriptionsByUserId, getMgSubscriptionsByUserId2, markMgSubscriptionAsFullyPaid, MgSubtoggleIsActive, updateMgSubscriptionDueDate } from './purchaseMgSub';
@@ -155,6 +163,7 @@ import { deleteGlobalMaterial, generateGlobalMaterialUploadUrl, getAllGlobalMate
 import { getPeersInSession } from './getRoomPeer';
 import { videocallSocketHandlerNew } from './sockets/videocall';
 import { createSipAppointmentLead, createSipCarousel1, createSipCarousel2, createSipMentor, deleteSipCarousel1, deleteSipCarousel2, deleteSipMentor, getSipAppointmentLeads, getSipCarousel1, getSipCarousel2, getSipMentors, updateSipMentorOrder } from './sip';
+import { generateUploadUrl } from './upload_genral';
 
 interface CustomSocket extends Socket {
   user?: any;
@@ -385,6 +394,7 @@ app.post("/admin/get_mentor_by_id", authAdmin, GetMentor)
 app.post("/admin/get_course", authAdmin, GetAllCourses)
 app.post("/get_course_web", GetAllCourses) // website no auth
 app.post("/admin/update_course", authAdmin, updateBigCourse)
+app.post("/admin/update_course2", authAdmin, updateBigCourse2)
 app.post("/admin/update_mentor", authAdmin, updateMentor)
 app.post("/admin/get_course_by_id", authAdmin, GetBigCoursesById)
 app.post("/admin/insert_banner", authAdmin, InsertBanner)
@@ -807,11 +817,22 @@ app.get("/sisyacoin/store/orders/me", authUser, getMyOrders);
 app.get("/sisyacoin/store/orders/:id", authAnyone, getOrderById);
 app.post("/admin/sisyacoin/store/orders/:id/refund", authAdmin, refundOrder);
 
+// Avatar store
+app.get("/sisyacoin/store/avatars", authAnyone, getAvatars);
+app.post("/admin/sisyacoin/store/avatars", authAdmin, createAvatar);
+app.put("/admin/sisyacoin/store/avatars/:id", authAdmin, updateAvatar);
+app.post("/sisyacoin/store/avatars/purchase", authUser, purchaseAvatar);
+app.get("/sisyacoin/store/avatars/me", authUser, getMyAvatars);
+app.get("/admin/sisyacoin/store/avatar-purchases", authAdmin, getAvatarPurchases);
+
 // Fiat purchases
 app.post("/sisyacoin/fiat-purchases", authUser, initiateFiatPurchase);
 app.post("/sisyacoin/fiat-purchases/provider/webhook", handlePaymentWebhook); // provider callback
 app.get("/sisyacoin/fiat-purchases/me", authUser, getMyFiatPurchases);
 app.get("/admin/sisyacoin/fiat-purchases", authAdmin, getAllFiatPurchases);
+
+//general upload
+app.post("/general_upload_url",generateUploadUrl);
 
 app.get("/info", function (_: Request, res: Response) {
   res.send(process.version)
