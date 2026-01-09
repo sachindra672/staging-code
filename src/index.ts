@@ -7,7 +7,7 @@ import * as jwt from 'jsonwebtoken';
 
 import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2, GetUserIdByUuid } from './UserFuncs';
 import { authenticateTokenUser, downlinkMessage, getRedisContents, prisma, SECRET, sendMsgx, uploadImage } from './misc';
-import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2 } from './mentor';
+import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2, toggleDoubtSpecialist, toggleDoubtAvailability, getDoubtSpecialists, GetDoubtSpecialistBySubject, getDoubtSpecialistsWithEarliestSlot } from './mentor';
 import { GetCoursesByGrade, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
 import { GetUsersByBigCourse, GetUsersByBigCourse2, InsertLessons, UpdateLessons } from './lessons';
 import { GetTeacherAssignments, GetUserAssingments, InsertAssignmentWithFiles, InsertSubmission, UpdateAssignment, GetMySubmissions, InsertSubmissionWithFiles } from './assignments';
@@ -24,6 +24,7 @@ import {
   createRate,
   getRates,
   updateRate,
+  adminAssignCoinsToUser,
   setRoleRewardLimit,
   getRoleRewardLimits,
 } from './sisyacoin/adminCoinController';
@@ -59,6 +60,7 @@ import {
   getAllAuditLogsAdmin,
   getAuditLogById,
   getAuditLogStats,
+  getDashboardStats,
 } from './sisyacoin/adminController';
 import {
   getAllStoreItemsAdmin,
@@ -88,6 +90,7 @@ import {
   getMyOrders,
   getOrderById,
   refundOrder,
+  generateStoreItemUploadUrl,
 } from './sisyacoin/storeController';
 import {
   getAvatars,
@@ -105,7 +108,41 @@ import {
 } from './sisyacoin/fiatPurchaseController';
 import { getChatHistoryParticipants, GetConversationn, GetMessages, getMessagesByUUID, GetMyUUID, insertMessage, MarkMessageIDsRead } from './messageStore';
 import { CreatePurchase, GetMyPurchases } from './purchases';
-import { AssignMentor, GetAllDoubts, getAssignedDoubts, getAssignedDoubtsList, getDoubtFiles, getMyDoubts, insertDoubt, insertDoubt2, insertDoubtResponse, updateDoubt, updateDoubtResponse } from './doubts';
+import {
+  AssignMentor,
+  GetAllDoubts,
+  getAssignedDoubts,
+  getAssignedDoubtsList,
+  getDoubtBalance,
+  getDoubtFiles,
+  getDoubtPurchaseHistory,
+  getMyDoubts,
+  insertDoubt,
+  insertDoubt2,
+  insertDoubt3,
+  insertDoubtResponse,
+  purchaseDoubtPackage,
+  updateDoubt,
+  updateDoubtResponse,
+  getDoubtPackages,
+  createDoubtPackage,
+  updateDoubtPackage,
+  deleteDoubtPackage,
+  getAllDoubtPackages,
+  getAllDoubtPackagePurchasesAdmin
+} from './doubts';
+import {
+  createDoubtSlot,
+  getDoubtSlots,
+  getAvailableDoubtSlots,
+  updateDoubtSlot,
+  deleteDoubtSlot,
+  bookDoubtSlot,
+  cancelSlotBooking,
+  completeSlotBooking,
+  getMentorSlotBookings,
+  getStudentSlotBookings
+} from './doubtSlots';
 import { UploadAssignments, UploadCourseMaterials } from "./uploads"
 import { DeleteCourse, DeleteSchedules, GetLtCourseCatalog, GetLtCourseCatalogBySubject, InsertLtCourse, InsertSchedule } from './ltCourse';
 import { GetOfferByCourse, InsertOffer } from './offers';
@@ -115,19 +152,19 @@ import { GetAllBoards, GetAllSubjectData, GetSubjectByGrade, GetSubjectById, Ins
 import { GetUserAssignments2 } from './getMyAssignments2';
 import { InsertAndCheckMcqResponses } from './mcqResponse';
 import { GetTestByCourseId } from './mcqTests';
-import { GetBigCourses, GetBigCourses2, GetBigCourses3, GetBigCoursesById, GetLongTermCoursesPublicList, getMaterialFilesList, getMaterialFilesListwithTime } from './bigCourseFuncs/mainCourse';
+import { GetBigCourseNewDetails, GetBigCourses, GetBigCourses2, GetBigCourses3, GetBigCoursesById, GetBigCoursesLesson, GetBigCoursesNew, GetCompletedSessions, GetLongTermCoursesPublicList, getMaterialFilesList, getMaterialFilesListwithTime, GetSessionRecordings, GetTodaySessions, GetUpcomingSessions, SearchSessionRecordings } from './bigCourseFuncs/mainCourse';
 import { getCourseTestResponses, getMyBgCourseSubscriptions, GetSessionTestSubmissions, SubmitCourseTestResponse } from './bigCourseFuncs/sessionTestResponse';
 import { GetMentor, GetMentorCourses, GetMentorRatings, InsertMentorRating } from './mentor2';
 import { deleteSession, EditSession, EditSession2, GetSessionsByBigCourse, getStreamInfo, GetVMIP, InsertNewSession, InsertNewSessionStream, InsertNewSessionStream2, recordingUploadedWebhook } from './sessions';
 import { GetMultipleStudentInfo, GetMyBigCourseStudents, getStudentByGrade } from './getMyStudents';
 import { getStudentAttendanceRecords, getStudentListBySession, insertAttendanceRecord, RecordAttendanceExitTime } from './attendanceRecords';
-import { InsertSessionTestQuestions, InsertSessionTests, InsertSessionTests2 } from './sessionTests';
-import { createSessionTestSubmission, createSessionTestSubmission2, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission } from './sessionTestSubmission';
+import { GetSessionTestQuestions, GetSessionTests, InsertSessionTestQuestions, InsertSessionTests, InsertSessionTests2 } from './sessionTests';
+import { createSessionTestSubmission, createSessionTestSubmission2, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission, submitSessionTestAttempt, viewSubmittedSessionTest } from './sessionTestSubmission';
 import { GetMyAttendanceProgressReport, sessionAttendanceList } from './studentProgressReport';
 import { AddMentor, createBigCourse, updateBigCourse, updateBigCourse2 } from './admin/adds';
 import { GetAllCourses, GetAllMentors, GetPagedStudentList } from './admin/gets.';
-import { createCtest, createCtest2, createCtestSubmission, createCtestSubmission2, deleteCTest, editCtest, editCtest2, generateCtestAttachmentUploadUrl, GetAllCtestSubmissionsByCourse, GetCtests, GetMyBigCourseCtestSubmission, GetMyCtestSubmission } from './ctest';
-import { createMgSubscription, getMgSubscriptions, getMgSubscriptionsByStudent, getMgSubscriptionsByUserId, getMgSubscriptionsByUserId2, markMgSubscriptionAsFullyPaid, MgSubtoggleIsActive, updateMgSubscriptionDueDate } from './purchaseMgSub';
+import { createCtest, createCtest2, createCtestSubmission, createCtestSubmission2, createImageCtestSubmission, deleteCTest, editCtest, editCtest2, finalizeImageCtestSubmission, generateCtestAnswerUploadUrl, generateCtestAttachmentUploadUrl, GetAllCtestSubmissionsByCourse, GetCtestSubmissionsByTest, GetCtests, GetMyBigCourseCtestSubmission, GetMyCtestSubmission, markImageAnswer, GetCtestSubmissionsByTest2, GetCourseTests, GetCourseTestQuestions, submitMcqCtest, submitImageCtest, viewSubmittedCtest } from './ctest';
+import { createMgSubscription, getMgSubscriptions, getMgSubscriptionsByStudent, getMgSubscriptionsByUserId, getMgSubscriptionsByUserId2, getMgSubscriptionsByUserId3, markMgSubscriptionAsFullyPaid, MgSubtoggleIsActive, updateMgSubscriptionDueDate } from './purchaseMgSub';
 import { GetCombinedStats } from './getCombinedStats';
 import { cancelScheduledNotifs, getScheduledNotifs, GetUserNotifications, InterceptAndPass, PassMultiNotifcation, updateScheduledNotifs } from './notifs';
 import { getFreeBannerList, InsertBanner, InsertFreeBanner, removeBanner } from './banners';
@@ -144,7 +181,7 @@ import { createAssetRecord, getAssetRecord, updateAssetRecord, getAllAssetRecord
 import { callToken } from './call';
 import { CreateGroup, GetMyGroups, UpdateGroup } from './groupChatFuncs';
 import { updateTextFile } from './updateStaticText';
-import { createMerrittoLead, createRegFormLeads, createRegFormLeads2, createRegFormLeads3, GetAllRegFormLeads, GetNewRegFormLeads, UpdateRegFormLeads, UpdateRegFormLeads2 } from './RegLeads';
+import { createMerrittoLead, createRegFormLeads, createRegFormLeads2, createRegFormLeads3, createRegFormLeadsNew, GetAllRegFormLeads, GetNewRegFormLeads, UpdateRegFormLeads, UpdateRegFormLeads2 } from './RegLeads';
 import { getCourseBannerList, InsertCourseBanners, removeCourseBanner } from './courseBanners';
 import { __assign } from 'tslib';
 import { createApnProvider, createInitiateCallHandler, ApnConfig, GetUserVoipToken, UpdateApnToken } from "./apn"
@@ -152,7 +189,7 @@ import pythonApiProxy from './etech_proxy';
 import { createqtest, createqtestSubmission, GetAllqtestSubmissionsByCourse, GetMyBigCourseqtestSubmission, GetMyqtestSubmission, Getqtests } from './qtest';
 import { genUserToken } from './userGenToken';
 import { abortS3upload, completeS3upload, getS3uploadUrl, initS3upload } from './awsUploadRecording';
-import { getSignedUrlAws, getSignedUrlGcp, updateRecordingUrl } from './recordings';
+import { getSignedUrlAws, getSignedUrlGcp, markRecordingAsWatched, updateRecordingUrl } from './recordings';
 import { addQuizWithQuestions, quizQuestionResponse } from './quiz';
 import { getAllQuizzes, getQuizWithStats, createQuiz, submitQuizResponse, endQuiz, getLeaderboardBySession, getLeaderboardByDay, getLeaderboardByCourse } from './sisyaQuiz';
 import { addGroupMemberEndpoint, createGroupEndpoint, deleteMessage, getAllGroupsAdmin, getGroupMessages, getMentorGroups, getNameByType, getReadReciept, getRecentMessagesGroup, getStudentGroups, markReadGroupMessage, sendGroupMessage, updateGroupType } from './courseGroupChat';
@@ -182,7 +219,7 @@ import { createBlogAdBanner, createCoursePageBanner, createTestimonalReelLink, c
 import { createTestimonialCard, deleteTestimonialCard, getAllTestimonialCards, updateTestimonialCard } from './testimonialCard';
 import { createFacultyMemberCard, deleteFacultyMemberCard, getAllFacultyMemberCards, updateFacultyMemberCard } from './facultyMemberWebCard';
 import { createBigCourseWeb, createChapterWeb, createSubjectWeb, getAllBigCourseWeb, getBigCourseWebByBigCourseId, getBigCourseWebByGrade, getBigCourseWebById, getChaptersBySubjectWeb, getSubjectsByCourseWeb, updateBigCourseWeb, updateChapterWeb, updateSubjectWeb } from './courseWeb';
-import { addComment, createBlog, createBlog2, createBlog3, deleteBlog, deleteTag, generateBlogAssetUploadUrl, getAllBlogs, getAllTags, getBlogById, getBlogsByTag, getNestedComments, getTrendingBlogs, toggleLikeBlog, updateBlog, updateBlogReadCount } from './blogs';
+import { addComment, createBlog, createBlog2, createBlog3, deleteBlog, deleteTag, generateBlogAssetUploadUrl, getAllBlogs, getAllTags, getBlogById, getBlogsByTag, getNestedComments, getTopTags, getTrendingBlogs, toggleLikeBlog, updateBlog, updateBlogReadCount } from './blogs';
 import { createNews, deleteNews, generateNewsAssetUploadUrl, getAllNews, getNewsById, updateNews } from './news';
 import { GetAllSubAdmins, InsertSubAdmin, ToggleSubAdminActive, UpdateSubAdmin } from './subadmin';
 import { deleteGlobalMaterial, generateGlobalMaterialUploadUrl, getAllGlobalMaterials, getGlobalMaterials, getGlobalMaterialsByClass, getGlobalMaterialsByClassAndType, saveGlobalMaterialMetadata } from './globalMaterial';
@@ -279,6 +316,7 @@ export const io = new SocketIOServer(server, {
 const SocketToUserIdMap = new Map<number, string>()
 
 app.use(express.json({ limit: "220mb" }));
+
 app.use('/mg_mat', express.static(path.join(__dirname, '../mg_mat')));
 app.use('/assignments', express.static(path.join(__dirname, '../assignments')));
 app.use('/submissions', express.static(path.join(__dirname, '../submissions')));
@@ -335,6 +373,10 @@ app.post("/teacher/start_ptm", authMentor, startPtm)
 app.post("/teacher/end_ptm", authMentor, endPtm)
 app.post("/teacher/get_users_per_course", authMentor, GetUsersByBigCourse)
 app.post("/teacher/get_ctest_submissions_by_course", authMentor, GetAllCtestSubmissionsByCourse)
+app.post("/teacher/list_ctest_submissions", authMentor, GetAllCtestSubmissionsByCourse)
+app.post("/teacher/get_ctest_submissions_by_test", authMentor, GetCtestSubmissionsByTest)
+app.post("/teacher/get_ctest_submissions_by_test2", authMentor, GetCtestSubmissionsByTest2)
+app.post("/teacher/get_student_ctest_submission", authMentor, GetMyCtestSubmission)
 app.post("/teacher/get_qtest_submissions_by_course", authMentor, GetAllqtestSubmissionsByCourse)
 app.post("/teacher/add_ptm_room_id", authMentor, AddRoomIdtoPtm)
 app.post("/teacher/get_assigned_doubts_list", authMentor, getAssignedDoubtsList)
@@ -357,6 +399,7 @@ app.post("/teacher/complete-s3-upload", authMentor, completeS3upload)
 app.post("/teacher/abort-s3-upload", authMentor, abortS3upload)
 app.post("/teacher/get-signed-url", authMentor, getSignedUrlGcp)
 app.post("/teacher/update_recording", authMentor, updateRecordingUrl)
+app.post("/recordings/mark-watched", authUser, markRecordingAsWatched)
 app.post("/teacher/quiz_with_questions", authMentor, addQuizWithQuestions)
 app.post("/teacher/quiz_question_response", authMentor, quizQuestionResponse)
 // SisyaClassQuiz routes
@@ -422,6 +465,9 @@ app.post("/get_course_web", GetAllCourses) // website no auth
 app.post("/admin/update_course", authAdmin, updateBigCourse)
 app.post("/admin/update_course2", authAdmin, updateBigCourse2)
 app.post("/admin/update_mentor", authAdmin, updateMentor)
+app.post("/admin/toggle_doubt_specialist", authAdmin, toggleDoubtSpecialist)
+app.post("/admin/toggle_doubt_availability", authAdmin, toggleDoubtAvailability)
+app.post("/admin/get_doubt_specialists", authAdmin, getDoubtSpecialists)
 app.post("/admin/get_course_by_id", authAdmin, GetBigCoursesById)
 app.post("/admin/insert_banner", authAdmin, InsertBanner)
 app.post("/admin/add_session", authAdmin, InsertNewSession)
@@ -449,6 +495,11 @@ app.post("/admin/get_scheduled_notifs", authAdmin, getScheduledNotifs)
 app.post("/admin/cancel_scheduled_notifs", authAdmin, cancelScheduledNotifs)
 app.post("/admin/update_scheduled_notifs", authAdmin, updateScheduledNotifs)
 app.post("/admin/all_doubts", authAdmin, GetAllDoubts)
+app.post("/admin/create_doubt_package", authAdmin, createDoubtPackage)
+app.post("/admin/update_doubt_package", authAdmin, updateDoubtPackage)
+app.post("/admin/delete_doubt_package", authAdmin, deleteDoubtPackage)
+app.post("/admin/get_all_doubt_packages", authAdmin, getAllDoubtPackages)
+app.post("/admin/get_all_doubt_package_purchases", authAdmin, getAllDoubtPackagePurchasesAdmin)
 app.post("/admin/create_hr", authAdmin, createHr)
 app.post("/admin/get_inq", authAdmin, getInq)
 app.post("/admin/upload_course_material", authAdmin, UploadCourseMaterials)
@@ -491,6 +542,7 @@ app.post("/admin/get_all_boards", authAdmin, GetAllBoards)
 app.post("/admin/create_big_course_subscription", authAdmin, createMgSubscription)
 app.post("/admin/get_conversation", authAdmin, GetConversationn)
 app.post("/admin/get_mg_subs", authAdmin, getMgSubscriptionsByUserId2)
+app.post("/admin/v1/get_mg_subs", authAdmin, getMgSubscriptionsByUserId3)
 app.post("/admin/get_subjects_by_grade", authAdmin, GetSubjectByGrade)
 app.post("/admin/create_open_session", authAdmin, createOpenSession)
 app.post("/update_open_session", updateOpenSession)
@@ -552,10 +604,37 @@ app.post("/get_courses", authUser, GetCoursesByGrade)
 //app.post("/get_course_detail", GetCourseDetail)
 app.post("/get_my_purchases", authUser, GetMyPurchases)
 app.post("/get_my_doubts", authUser, getMyDoubts)
-app.post("/create_doubt", authUser, insertDoubt2)
+app.post("/create_doubt", authUser, insertDoubt3)
+// app.post("/create_doubt", authUser, insertDoubt2)
+app.post("/create_doubt_with_slot", authUser, insertDoubt3)
+app.post("/get_doubt_balance", authUser, getDoubtBalance)
+app.post("/get_doubt_packages", getDoubtPackages) // Public - no auth required
+app.post("/purchase_doubt_package", authUser, purchaseDoubtPackage)
+app.post("/get_doubt_purchase_history", authUser, getDoubtPurchaseHistory)
 app.post("/assign_mentor_doubt", authUser, AssignMentor)
 app.patch("/update_doubt", authUser, updateDoubt)
+
+// Doubt Slot Management Routes
+app.post("/teacher/create_doubt_slot", authMentor, createDoubtSlot)
+app.post("/teacher/get_doubt_slots", authMentor, getDoubtSlots)
+app.post("/teacher/update_doubt_slot", authMentor, updateDoubtSlot)
+app.post("/teacher/delete_doubt_slot", authMentor, deleteDoubtSlot)
+app.post("/teacher/get_slot_bookings", authMentor, getMentorSlotBookings)
+app.post("/teacher/cancel_doubt_slot_booking", authMentor, cancelSlotBooking)
+app.post("/teacher/complete_doubt_slot_booking", authMentor, completeSlotBooking)
+
+app.post("/admin/create_doubt_slot", authAdmin, createDoubtSlot)
+app.post("/admin/get_doubt_slots", authAdmin, getDoubtSlots)
+app.post("/admin/update_doubt_slot", authAdmin, updateDoubtSlot)
+app.post("/admin/delete_doubt_slot", authAdmin, deleteDoubtSlot)
+app.post("/admin/get_slot_bookings", authAdmin, getMentorSlotBookings)
+
+app.post("/get_available_doubt_slots", authUser, getAvailableDoubtSlots)
+app.post("/book_doubt_slot", authUser, bookDoubtSlot)
+app.post("/get_my_doubt_slot_bookings", authUser, getStudentSlotBookings)
+
 app.post("/get_messages", authUser, GetMessages)
+
 app.post("/mark_message_read", authUser, MarkMessageIDsRead)
 app.post("/submit_assignment", authUser, InsertSubmission)
 app.post("/get_all_quizzes", authUser, getAllQuizzes)
@@ -564,6 +643,8 @@ app.get("/otps", getRedisContents) // --------------- remove in prod -----------
 app.post("/create_purchase", authUser, CreatePurchase)
 app.post("/get_mentor_by_class", authUser, GetMentorsByClasses)
 app.post("/get_mentor_by_subject", authUser, GetMentorBySubject)
+app.post("/get_doubt_specialist_by_subject", authUser, GetDoubtSpecialistBySubject)
+app.post("/get_doubt_specialists_with_earliest_slot", authUser, getDoubtSpecialistsWithEarliestSlot)
 app.post("/get_mentor_details", authUser, GetMentorData)
 app.post("/get_mentor_details_web", GetMentorData)
 app.post("/get_offers_by_course", authUser, GetOfferByCourse)
@@ -588,8 +669,25 @@ app.post("/get_course_tests", authUser, GetTestByCourseId)
 app.post("/get_my_submissions", authUser, GetMySubmissions)
 app.post("/get_bg_course_info", authUser, GetBigCourses)
 app.post("/get_bg_course_info2", authUser, GetBigCourses2)
+app.post("/v1/get_bg_course_info", authUser, GetBigCoursesNew)
+app.post("/v1/get_bg_course_info_details", authUser, GetBigCourseNewDetails)
+app.post("/v1/get_bg_course_lessons", authUser, GetBigCoursesLesson)
+app.post("/v1/get_upcoming_session", authUser, GetUpcomingSessions)
+app.post("/v1/get_completed_session", authUser, GetCompletedSessions)
+app.post("/v1/get_session_recordings", authUser, GetSessionRecordings)
+app.post("/v1/search_session_recordings", authUser, SearchSessionRecordings)
+app.post("/v1/get_session_homework", authUser, GetSessionTests)
+app.post("/v1/get_session_homework_questions", authUser, GetSessionTestQuestions)
+app.post("/v1/submit_session_homework_attempt", authUser, submitSessionTestAttempt)
+app.post("/v1/view_submitted_session_homework", authUser, viewSubmittedSessionTest)
+app.post("/v1/get_tests", authUser, GetCourseTests)
+app.post("/v1/get_test_question", authUser, GetCourseTestQuestions)
+app.post("/v1/submit_test_attempt", authUser, submitMcqCtest)
+app.post("/v1/submit_image_test_attempt", authUser, submitImageCtest)
+app.post("/v1/view_submitted_test_attempt", authUser, viewSubmittedCtest)
+app.post("/v1/get_today_session", authUser, GetTodaySessions)
 app.post("/get_mentor_by_id", authUser, GetMentor)
-app.post("/submit_session_test", authUser, createSessionTestSubmission)
+app.post("/submit_session_test", authUser, createSessionTestSubmission2)
 app.post("/submit_session_test2", authUser, createSessionTestSubmission2)
 app.post("/get_session_test_responses", authUser, GetSessionTestSubmissions)
 app.post("/create_big_course_subscription", authUser, createMgSubscription)//--------------------------------
@@ -608,13 +706,18 @@ app.post("/get_ctests", authUser, GetCtests)
 app.post("/get_qtests", authUser, Getqtests)
 app.post("/submit_ctest", authUser, createCtestSubmission)
 app.post("/submit_ctest2", authUser, createCtestSubmission2)
+app.post("/submit_ctest_image", authUser, createImageCtestSubmission)
+app.post("/teacher/ctest/image/answers/mark", authMentor, markImageAnswer)
+app.post("/teacher/ctest/image/submissions/finalize", authMentor, finalizeImageCtestSubmission)
 app.post("/gen_ctest_attachment_url", authUser, generateCtestAttachmentUploadUrl)
+app.post("/gen_ctest_answer_url", authUser, generateCtestAnswerUploadUrl)
 app.post("/submit_qtest", authUser, createqtestSubmission)
 app.post("/get_my_ctest_submissions", authUser, GetMyCtestSubmission)
 app.post("/get_my_qtest_submissions", authUser, GetMyqtestSubmission)
 app.post("/get_my_big_course_ctest_submissions", authUser, GetMyBigCourseCtestSubmission)
 app.post("/get_my_big_course_qtest_submissions", authUser, GetMyBigCourseqtestSubmission)
 app.post("/get_mg_subs", authUser, getMgSubscriptionsByUserId)
+app.post("/v1/get_mg_subs", authUser, getMgSubscriptionsByUserId3)
 app.post("/get_mg_subs_web", getMgSubscriptionsByUserId) //website not auth
 app.post("/get_doubt_file_list", authUser, getDoubtFiles)
 app.post("/get_online_teachers", authUser, GetOnlineTeachersList)
@@ -643,8 +746,9 @@ app.post("/get_my_group", authUser, GetMyGroups)
 app.post("/edit_session", authUser, EditSession)
 app.post("/get_download_link", downlinkMessage)
 app.post("/new_reg_lead", createRegFormLeads) //website no auth
-app.post("/new_reg_lead2", createRegFormLeads2) //website no auth
+app.post("/new_reg_lead2", createRegFormLeadsNew) //website no auth
 app.post("/new_reg_lead3", createRegFormLeads3) //website no auth
+app.post("/new_reg_lead_new", createRegFormLeadsNew) //website no auth
 app.post("/update_reg_lead", UpdateRegFormLeads) //website no auth
 app.post("/update_reg_lead2", UpdateRegFormLeads2) //website no auth
 app.post("/get_course_banners_list", getCourseBannerList)
@@ -726,6 +830,7 @@ app.post('/toggle_like_blog', toggleLikeBlog);
 app.post('/add_comment', addComment);
 app.post('/update_blog_read_count', updateBlogReadCount);
 app.post('/get_all_tags', getAllTags);
+app.post('/get_top_tags', getTopTags);
 app.post('/del_tag', deleteTag);
 app.post('/get_blog_by_tag', getBlogsByTag);
 app.post('/get_nested_comments', getNestedComments);
@@ -798,6 +903,7 @@ app.get("/admin/sisyacoin/wallets", authAdmin, getAllWallets);
 // Admin coin ops & rates
 app.post("/admin/sisyacoin/coins/mint", authAdmin, mintCoins);
 app.post("/admin/sisyacoin/coins/burn", authAdmin, burnCoins);
+app.post("/admin/sisyacoin/coins/assign", authAdmin, adminAssignCoinsToUser);
 app.post("/admin/sisyacoin/rates", authAdmin, createRate);
 app.get("/admin/sisyacoin/rates", authAdmin, getRates);
 app.put("/admin/sisyacoin/rates/:id", authAdmin, updateRate);
@@ -841,7 +947,7 @@ app.get("/sisyacoin/transactions/me", authAnyone, getMyTransactions);
 app.get("/sisyacoin/transactions/today", authAnyone, getTodayTransactions);
 app.get("/sisyacoin/transactions/week", authAnyone, getThisWeekTransactions);
 app.get("/sisyacoin/transactions/:id", authAnyone, getTransactionById);
-app.get("/sisyacoin/admin/wallets/:walletId/transactions", authAdmin, getWalletTransactions);
+app.get("/admin/sisyacoin/trxn/wallets/:walletId/transactions", authAdmin, getWalletTransactions);
 // Admin Transaction Management
 app.get("/admin/sisyacoin/transactions", authAdmin, getAllTransactionsAdmin);
 app.get("/admin/sisyacoin/transactions/analytics", authAdmin, getTransactionAnalytics);
@@ -851,8 +957,12 @@ app.get("/admin/sisyacoin/audit-logs", authAdmin, getAllAuditLogsAdmin);
 app.get("/admin/sisyacoin/audit-logs/:logId", authAdmin, getAuditLogById);
 app.get("/admin/sisyacoin/audit-logs/stats", authAdmin, getAuditLogStats);
 
+// Dashboard Stats
+app.get("/admin/sisyacoin/dashboard/stats", authAdmin, getDashboardStats);
+
 // Store
 app.get("/sisyacoin/store/items", authAnyone, getStoreItems);
+app.post("/admin/sisyacoin/store/items/upload-url", authAdmin, generateStoreItemUploadUrl);
 app.post("/admin/sisyacoin/store/items", authAdmin, createStoreItem);
 app.put("/admin/sisyacoin/store/items", authAdmin, updateStoreItem);
 // Admin Store Management

@@ -322,6 +322,31 @@ export async function purchaseAvatar(req: Request, res: Response) {
                 }
             });
 
+            // Credit the spent coins back to the system wallet
+            const systemWallet = await tx.sisyaWallet.findUnique({
+                where: {
+                    ownerType_ownerId: {
+                        ownerType: "SYSTEM",
+                        ownerId: 0
+                    }
+                }
+            });
+
+            if (!systemWallet) {
+                throw new Error("SYSTEM_WALLET_NOT_FOUND");
+            }
+
+            const systemBalanceBefore = systemWallet.spendableBalance;
+            const systemBalanceAfter = systemBalanceBefore.plus(avatar.priceCoins);
+
+            await tx.sisyaWallet.update({
+                where: { id: systemWallet.id },
+                data: {
+                    spendableBalance: systemBalanceAfter,
+                    totalEarned: systemWallet.totalEarned.plus(avatar.priceCoins)
+                }
+            });
+
             const purchase = await tx.sisyaAvatarPurchase.create({
                 data: {
                     walletId: wallet.id,
@@ -349,6 +374,26 @@ export async function purchaseAvatar(req: Request, res: Response) {
                         avatarName: avatar.name,
                         expiryUsed: expiryUsed.toString(),
                         normalUsed: normalUsed.toString()
+                    }
+                }
+            });
+
+            // Log corresponding credit transaction for system wallet
+            await tx.sisyaTransaction.create({
+                data: {
+                    walletId: systemWallet.id,
+                    type: "TRANSFER",
+                    status: "COMPLETED",
+                    amount: avatar.priceCoins,
+                    fee: new Decimal(0),
+                    balanceBefore: systemBalanceBefore,
+                    balanceAfter: systemBalanceAfter,
+                    balanceType: "SPENDABLE",
+                    counterpartyWalletId: wallet.id,
+                    metadata: {
+                        reason: `Avatar purchase receipt: ${avatar.name}`,
+                        avatarId: avatar.id,
+                        avatarName: avatar.name
                     }
                 }
             });

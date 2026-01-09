@@ -291,7 +291,7 @@ export async function GetMentorBySubject(req: Request, res: Response) {
                 subjectId,
                 mentorId: { not: null },
                 mentor: {
-                    isActive: true,  
+                    isActive: true,
                 },
             },
             include: {
@@ -305,6 +305,249 @@ export async function GetMentorBySubject(req: Request, res: Response) {
         res.status(500).send({ success: false, message: error });
     }
 }
+
+export async function GetDoubtSpecialistBySubject(req: Request, res: Response) {
+    const { subjectId } = req.body;
+
+    if (!subjectId) {
+        return res.status(400).json({
+            success: false,
+            message: "subjectId is required",
+        });
+    }
+
+    try {
+        const records = await prisma.subjectRecord.findMany({
+            where: {
+                subjectId,
+                mentorId: { not: null },
+                mentor: {
+                    isActive: true,
+                    isDoubtSpecialist: true,
+                    isAvailableForDoubts: true,
+                },
+            },
+            include: {
+                mentor: true,
+            },
+        });
+
+        return res.status(200).json({
+            success: true,
+            records,
+        });
+    } catch (error) {
+        console.error("GetMentorBySubject error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+}
+
+export async function getDoubtSpecialistsWithEarliestSlot(req: Request, res: Response) {
+    const { subjectId } = req.body;
+
+    if (!subjectId) {
+        return res.status(400).json({
+            success: false,
+            error: "subjectId is required"
+        });
+    }
+
+    try {
+        const now = new Date();
+
+        const subjectRecords = await prisma.subjectRecord.findMany({
+            where: {
+                subjectId: Number(subjectId),
+                mentorId: { not: null },
+                mentor: {
+                    isActive: true,
+                    isDoubtSpecialist: true,
+                    isAvailableForDoubts: true,
+                },
+            },
+            include: {
+                mentor: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone: true,
+                        isDoubtSpecialist: true,
+                        isAvailableForDoubts: true,
+                        doubtsSolved: true,
+                        averageRating: true,
+                    }
+                }
+            },
+        });
+
+        if (subjectRecords.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: {
+                    specialists: [],
+                    summary: {
+                        total: 0,
+                        withAvailableSlots: 0,
+                        withoutSlots: 0,
+                    }
+                }
+            });
+        }
+
+        // Deduplicate mentors by mentorId - use Map to track unique mentors
+        const uniqueMentors = new Map<number, typeof subjectRecords[0]>();
+        for (const record of subjectRecords) {
+            if (record.mentorId !== null && !uniqueMentors.has(record.mentorId)) {
+                uniqueMentors.set(record.mentorId, record);
+            }
+        }
+
+        const mentorIds = Array.from(uniqueMentors.keys());
+
+        if (mentorIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: {
+                    specialists: [],
+                    summary: {
+                        total: 0,
+                        withAvailableSlots: 0,
+                    }
+                }
+            });
+        }
+
+        // Get earliest available slot instances for each mentor
+        const earliestSlotInstances = await prisma.doubtSlotInstance.findMany({
+            where: {
+                mentorId: { in: mentorIds },
+                isAvailable: true,
+                isActive: true,
+                startTime: { gte: now },
+            },
+            select: {
+                id: true,
+                mentorId: true,
+                startTime: true,
+                endTime: true,
+                maxCapacity: true,
+                currentBookings: true,
+            },
+            orderBy: {
+                startTime: 'asc'
+            },
+        });
+
+        // Get earliest available doubt slots (non-instance slots) for each mentor
+        const earliestDoubtSlots = await prisma.doubtSlot.findMany({
+            where: {
+                mentorId: { in: mentorIds },
+                isAvailable: true,
+                isActive: true,
+                startTime: { gte: now },
+            },
+            select: {
+                id: true,
+                mentorId: true,
+                startTime: true,
+                endTime: true,
+                maxCapacity: true,
+                currentBookings: true,
+            },
+            orderBy: {
+                startTime: 'asc'
+            },
+        });
+
+        // Combine both types of slots and group by mentorId to get earliest for each
+        const earliestSlotByMentor = new Map<number, { id: number; mentorId: number; startTime: Date; endTime: Date; maxCapacity: number; currentBookings: number; isInstance: boolean }>();
+
+        // Process slot instances
+        for (const slot of earliestSlotInstances) {
+            if (!earliestSlotByMentor.has(slot.mentorId)) {
+                if ((slot.currentBookings || 0) < slot.maxCapacity) {
+                    earliestSlotByMentor.set(slot.mentorId, { ...slot, isInstance: true });
+                }
+            } else {
+                const existing = earliestSlotByMentor.get(slot.mentorId)!;
+                if (slot.startTime < existing.startTime && (slot.currentBookings || 0) < slot.maxCapacity) {
+                    earliestSlotByMentor.set(slot.mentorId, { ...slot, isInstance: true });
+                }
+            }
+        }
+
+        // Process doubt slots (non-instance)
+        for (const slot of earliestDoubtSlots) {
+            if (!earliestSlotByMentor.has(slot.mentorId)) {
+                if ((slot.currentBookings || 0) < slot.maxCapacity) {
+                    earliestSlotByMentor.set(slot.mentorId, { ...slot, isInstance: false });
+                }
+            } else {
+                const existing = earliestSlotByMentor.get(slot.mentorId)!;
+                if (slot.startTime < existing.startTime && (slot.currentBookings || 0) < slot.maxCapacity) {
+                    earliestSlotByMentor.set(slot.mentorId, { ...slot, isInstance: false });
+                }
+            }
+        }
+
+        // Only return mentors with available slots, deduplicated
+        const specialistsWithSlots = Array.from(uniqueMentors.values())
+            .filter(record => {
+                const mentorId = record.mentorId;
+                return mentorId !== null && earliestSlotByMentor.has(mentorId);
+            })
+            .map(record => {
+                const mentorId = record.mentorId!;
+                const slot = earliestSlotByMentor.get(mentorId)!;
+                return {
+                    mentorId: record.mentor.id,
+                    name: record.mentor.name,
+                    email: record.mentor.email,
+                    phone: record.mentor.phone,
+                    isDoubtSpecialist: (record.mentor as any).isDoubtSpecialist,
+                    isAvailableForDoubts: (record.mentor as any).isAvailableForDoubts,
+                    doubtsSolved: record.mentor.doubtsSolved,
+                    averageRating: record.mentor.averageRating,
+                    earliestAvailableSlot: {
+                        slotId: slot.id,
+                        slotInstanceId: slot.isInstance ? slot.id : null,
+                        isInstance: slot.isInstance,
+                        startTime: slot.startTime,
+                        endTime: slot.endTime,
+                        maxCapacity: slot.maxCapacity,
+                        currentBookings: slot.currentBookings || 0,
+                        availableSpots: slot.maxCapacity - (slot.currentBookings || 0),
+                    },
+                    slotStartTime: slot.startTime.getTime(),
+                };
+            })
+            .sort((a, b) => a.slotStartTime - b.slotStartTime)
+            .map(({ slotStartTime, ...rest }) => rest);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                specialists: specialistsWithSlots,
+                summary: {
+                    total: specialistsWithSlots.length,
+                    withAvailableSlots: specialistsWithSlots.length,
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching doubt specialists with earliest slot:", error);
+        res.status(500).json({
+            success: false,
+            error: "Internal server error",
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+    }
+}
+
 
 
 export async function GetMentorData(req: Request, res: Response) {
@@ -386,6 +629,192 @@ export async function GetMyMentors(req: Request, res: Response): Promise<void> {
                 details: error instanceof Error ? error.message : 'Unknown error',
             });
         }
+    }
+}
+
+/**
+ * Toggle mentor's doubt specialist status
+ * Admin only endpoint
+ */
+export async function toggleDoubtSpecialist(req: Request, res: Response) {
+    try {
+        const { mentorId, isDoubtSpecialist } = req.body;
+
+        if (!mentorId || typeof isDoubtSpecialist !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: mentorId (number) and isDoubtSpecialist (boolean)'
+            });
+        }
+
+        const mentor = await prisma.mentor.findUnique({
+            where: { id: Number(mentorId) }
+        });
+
+        if (!mentor) {
+            return res.status(404).json({
+                success: false,
+                error: 'Mentor not found'
+            });
+        }
+
+        const updatedMentor = await prisma.mentor.update({
+            where: { id: Number(mentorId) },
+            data: {
+                isDoubtSpecialist: isDoubtSpecialist,
+                // If removing specialist status, also set availability to false
+                isAvailableForDoubts: isDoubtSpecialist ? mentor.isAvailableForDoubts : false
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Mentor ${isDoubtSpecialist ? 'marked as' : 'removed from'} doubt specialist`,
+            data: {
+                mentorId: updatedMentor.id,
+                name: updatedMentor.name,
+                isDoubtSpecialist: updatedMentor.isDoubtSpecialist,
+                isAvailableForDoubts: updatedMentor.isAvailableForDoubts
+            }
+        });
+    } catch (error) {
+        console.error('Error toggling doubt specialist:', error);
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === 'P2001') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Mentor not found'
+                });
+            }
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}
+
+/**
+ * Toggle mentor's availability for doubt solving
+ * Admin only endpoint
+ */
+export async function toggleDoubtAvailability(req: Request, res: Response) {
+    try {
+        const { mentorId, isAvailableForDoubts } = req.body;
+
+        if (!mentorId || typeof isAvailableForDoubts !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: mentorId (number) and isAvailableForDoubts (boolean)'
+            });
+        }
+
+        const mentor = await prisma.mentor.findUnique({
+            where: { id: Number(mentorId) },
+            select: { id: true, name: true, isDoubtSpecialist: true }
+        });
+
+        if (!mentor) {
+            return res.status(404).json({
+                success: false,
+                error: 'Mentor not found'
+            });
+        }
+
+        if (!mentor.isDoubtSpecialist) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mentor is not a doubt specialist. Please mark as specialist first.'
+            });
+        }
+
+        const updatedMentor = await prisma.mentor.update({
+            where: { id: Number(mentorId) },
+            data: {
+                isAvailableForDoubts: isAvailableForDoubts
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Mentor availability ${isAvailableForDoubts ? 'enabled' : 'disabled'} for doubt solving`,
+            data: {
+                mentorId: updatedMentor.id,
+                name: updatedMentor.name,
+                isDoubtSpecialist: updatedMentor.isDoubtSpecialist,
+                isAvailableForDoubts: updatedMentor.isAvailableForDoubts
+            }
+        });
+    } catch (error) {
+        console.error('Error toggling doubt availability:', error);
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === 'P2001') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Mentor not found'
+                });
+            }
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}
+
+/**
+ * Get all doubt specialists with their availability status
+ * Admin only endpoint
+ */
+export async function getDoubtSpecialists(_req: Request, res: Response) {
+    try {
+        const specialists = await prisma.mentor.findMany({
+            where: {
+                isDoubtSpecialist: true
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                isDoubtSpecialist: true,
+                isAvailableForDoubts: true,
+                isActive: true,
+                doubtsSolved: true,
+                averageRating: true
+            },
+            orderBy: {
+                name: 'asc'
+            }
+        });
+
+        const availableCount = specialists.filter(s => s.isAvailableForDoubts).length;
+        const unavailableCount = specialists.length - availableCount;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                specialists: specialists,
+                summary: {
+                    total: specialists.length,
+                    available: availableCount,
+                    unavailable: unavailableCount
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching doubt specialists:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 }
 

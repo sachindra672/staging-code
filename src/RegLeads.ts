@@ -207,6 +207,123 @@ export async function createRegFormLeads3(req: Request, res: Response) {
     }
 }
 
+export async function createRegFormLeadsNew(req: Request, res: Response) {
+    try {
+        const {
+            ref_id,
+            name,
+            phone,
+            courseName,
+            cf_class,
+            state,
+            source,
+            medium,
+            ...rest
+        } = req.body;
+
+        if (!phone || !name) {
+            return res.status(400).json({
+                success: false,
+                error: "phone and name are required",
+            });
+        }
+
+        /* 🔍 1. Check existing lead */
+        const existingLead = await prisma.regterationLeads.findFirst({
+            where: {
+                phone,
+                name: {
+                    equals: name,
+                    mode: "insensitive",
+                },
+                merrittoId: {
+                    not: null,
+                },
+            },
+            orderBy: {
+                createdOn: "desc",
+            },
+        });
+
+        if (existingLead) {
+            return res.json({
+                success: true,
+                lead: existingLead,
+                reused: true,
+            });
+        }
+
+        /* 🆕 2. Create new lead */
+        const referredBy = ref_id ? nanoIdToNameMap[ref_id] ?? null : null;
+        const formattedClass = formatClass(cf_class);
+
+        const lead = await prisma.regterationLeads.create({
+            data: {
+                ...rest,
+                name,
+                phone,
+                courseName,
+                referredBy,
+                ref_id,
+                class: formattedClass,
+            },
+        });
+
+        /* 🔁 3. Push to NoPaperForms */
+        try {
+            const npfResponse = await axios.post(
+                "https://api.nopaperforms.io/lead/v1/create",
+                {
+                    name: "SISYA STUDENT",
+                    mobile: phone,
+                    cf_status: "initiated",
+                    cf_class: formattedClass,
+                    cf_board: "CBSE",
+                    state: state ?? "Andhra Pradesh",
+                    email: `email${phone}@gmail.com`,
+                    source,
+                    medium,
+                    campaign: name,
+                },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Access-Key": process.env.NPF_ACCESS_KEY as string,
+                        "Secret-Key": process.env.NPF_SECRET_KEY as string,
+                    },
+                }
+            );
+
+            const merrittoId = npfResponse.data?.data?.lead_id;
+
+            if (merrittoId) {
+                await prisma.regterationLeads.update({
+                    where: { id: lead.id },
+                    data: { merrittoId },
+                });
+            }
+        } catch (npfErr: any) {
+            console.error(
+                "NoPaperForms error:",
+                npfErr.response?.data || npfErr.message
+            );
+        }
+
+        return res.json({
+            success: true,
+            lead,
+            reused: false,
+        });
+    } catch (e) {
+        console.error("Error creating lead:", e);
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
+    }
+}
+
+
 
 interface MerrittoLeadData {
     name: string;

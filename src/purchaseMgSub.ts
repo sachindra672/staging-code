@@ -68,6 +68,64 @@ export async function createMgSubscription(req: Request, res: Response) {
             }
         })
 
+        // Handle monthly doubt benefit for enrolled students
+        try {
+            // Find or create doubtRecord for the user
+            let doubtRecord = await prisma.doubtRecord.findFirst({
+                where: { endUsersId: Number(endUsersId) }
+            });
+
+            if (!doubtRecord) {
+                // Create new doubtRecord if it doesn't exist
+                doubtRecord = await prisma.doubtRecord.create({
+                    data: {
+                        endUsersId: Number(endUsersId),
+                        doubtsAsked: 0,
+                        doubtsRemaining: 5, // Default purchased doubts
+                        monthlyDoubtsRemaining: 0,
+                        monthlyDoubtAllowance: 15,
+                        isMonthlyBenefitActive: false,
+                    }
+                });
+            }
+
+            // Check if user already has a linked subscription
+            let shouldUpdate = true;
+            if (doubtRecord.linkedSubscriptionId !== null) {
+                // Check if existing linked subscription is more recent
+                const existingSubscription = await prisma.mgSubsciption.findUnique({
+                    where: { id: doubtRecord.linkedSubscriptionId }
+                });
+
+                if (existingSubscription && existingSubscription.createdAt > newSubscription.createdAt) {
+                    // Existing subscription is more recent, don't replace
+                    shouldUpdate = false;
+                }
+            }
+
+            if (shouldUpdate) {
+                // Get current purchased doubts to preserve them
+                const currentPurchasedDoubts = doubtRecord.doubtsRemaining || 5;
+
+                // Link doubtRecord to new subscription and set monthly benefit
+                await prisma.doubtRecord.update({
+                    where: { id: doubtRecord.id },
+                    data: {
+                        linkedSubscriptionId: newSubscription.id,
+                        enrollmentDate: newSubscription.createdAt,
+                        lastMonthlyResetDate: newSubscription.createdAt, // First reset will be 30 days from this
+                        isMonthlyBenefitActive: true,
+                        monthlyDoubtsRemaining: 15, // Set monthly benefit to 15
+                        monthlyDoubtAllowance: 15,
+                        doubtsRemaining: currentPurchasedDoubts, // Preserve purchased doubts
+                    }
+                });
+            }
+        } catch (doubtError) {
+            // Log error but don't fail subscription creation
+            console.error("Error setting up monthly doubt benefit:", doubtError);
+        }
+
         // await addStudentToGroup(Number(endUsersId), Number(bigCourseId));
         const existingGroup = await prisma.groupChat.findFirst({
             where: {
@@ -223,6 +281,64 @@ export async function getMgSubscriptionsByUserId2(req: Request, res: Response) {
     }
 }
 
+export async function getMgSubscriptionsByUserId3(req: Request, res: Response) {
+    const { endUsersId } = req.body
+
+    if (!endUsersId || isNaN(Number(endUsersId))) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid or missing endUsersId"
+        })
+    }
+
+    try {
+        const subscriptions = await prisma.mgSubsciption.findMany({
+            where: {
+                endUsersId: Number(endUsersId),
+            },
+            include: {
+                course: {
+                    select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                        level: true,
+                        price: true,
+                        currentPrice: true,
+                        isLongTerm: true,
+                        isFree: true,
+                        startDate: true,
+                        endDate: true,
+                        averageRating: true,
+                        isActive: true,
+                        grade: true,
+                        partialPrice: true,
+                    },
+                },
+            },
+        });
+
+
+        if (subscriptions.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: "No subscriptions found for this user"
+            })
+        }
+
+        res.status(200).json({
+            success: true,
+            data: subscriptions
+        })
+    } catch (error) {
+        console.error("Error retrieving mgSubscriptions:", error)
+        res.status(500).json({
+            success: false,
+            error: "Internal server error"
+        })
+    }
+}
+
 export async function markMgSubscriptionAsFullyPaid(req: Request, res: Response) {
     const { endUsersId, bigCourseId } = req.body;
 
@@ -303,6 +419,54 @@ export async function MgSubtoggleIsActive(req: Request, res: Response) {
             where: { id: Number(id) },
             data: { isActive }
         });
+
+        // Handle monthly doubt benefit deactivation
+        if (!isActive) {
+            // Subscription is being deactivated
+            try {
+                const doubtRecord = await prisma.doubtRecord.findFirst({
+                    where: { linkedSubscriptionId: Number(id) }
+                });
+
+                if (doubtRecord) {
+                    // Deactivate monthly benefit but preserve doubts
+                    await prisma.doubtRecord.update({
+                        where: { id: doubtRecord.id },
+                        data: {
+                            isMonthlyBenefitActive: false,
+                            // Keep monthlyDoubtsRemaining and doubtsRemaining as is
+                            // Don't remove doubts, just deactivate benefit
+                        }
+                    });
+                }
+            } catch (doubtError) {
+                // Log error but don't fail subscription update
+                console.error("Error deactivating monthly doubt benefit:", doubtError);
+            }
+        } else {
+            // Subscription is being reactivated
+            try {
+                const doubtRecord = await prisma.doubtRecord.findFirst({
+                    where: { linkedSubscriptionId: Number(id) }
+                });
+
+                if (doubtRecord) {
+                    // Reactivate monthly benefit and reset monthly doubts
+                    await prisma.doubtRecord.update({
+                        where: { id: doubtRecord.id },
+                        data: {
+                            isMonthlyBenefitActive: true,
+                            monthlyDoubtsRemaining: 15, // Reset to 15 on reactivation
+                            lastMonthlyResetDate: new Date(), // Reset timer
+                            enrollmentDate: updatedSubscription.createdAt, // Update enrollment date
+                        }
+                    });
+                }
+            } catch (doubtError) {
+                // Log error but don't fail subscription update
+                console.error("Error reactivating monthly doubt benefit:", doubtError);
+            }
+        }
 
         res.json({ success: true, data: updatedSubscription });
     } catch (error) {

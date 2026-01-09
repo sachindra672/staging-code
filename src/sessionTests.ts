@@ -1,6 +1,7 @@
 
 import { prisma } from './misc'
 import { Request, Response } from 'express'
+import { getCache, setCache, invalidateCache } from './utils/cacheUtils';
 
 
 export async function InsertSessionTests(req: Request, res: Response) {
@@ -165,3 +166,187 @@ export async function InsertSessionTestQuestions(req: Request, res: Response) {
         }
     }
 }
+
+//list + attempted or not
+export async function GetSessionTests(req: Request, res: Response) {
+    const { courseId, userId, page = 1 } = req.body;
+
+    if (!courseId || !userId) {
+        return res.status(400).json({
+            success: false,
+            error: "courseId or userId missing",
+        });
+    }
+
+    const LIMIT = 20;
+    const offset = (Number(page) - 1) * LIMIT;
+
+    const cacheKey = `course:sessionTests:${courseId}:user:${userId}:page:${page}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            console.log(`cached homework`, cached)
+            return res.json({
+                success: true,
+                homeworks: cached.homeworks,
+                pagination: cached.pagination,
+                source: "cache",
+            });
+        }
+
+        const [homeworks, total] = await Promise.all([
+            prisma.sessionTest.findMany({
+                where: {
+                    createdFor: {
+                        bigCourseId: courseId,
+                    },
+                },
+                select: {
+                    id: true,
+                    startTime: true,
+                    endTime: true,
+                    duration: true,
+                    createdFor: {
+                        select: {
+                            id: true,
+                            detail: true,
+                            bigCourseId: true,
+                            subject: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                },
+                            }
+                        },
+                    },
+                    sessionTestSubmission: {
+                        where: {
+                            endUsersId: userId,
+                        },
+                        select: {
+                            id: true,
+                        },
+                        take: 1,
+                    },
+                },
+                orderBy: {
+                    startTime: "desc",
+                },
+                skip: offset,
+                take: LIMIT,
+            }),
+
+            prisma.sessionTest.count({
+                where: {
+                    createdFor: {
+                        bigCourseId: courseId,
+                    },
+                },
+            }),
+        ]);
+
+        const response = homeworks.map((homework) => ({
+            homeworkId: homework.id,
+            courseId: homework.createdFor.bigCourseId,
+            sessionTestForId: homework.createdFor.id,
+            subject: homework.createdFor.subject.name,
+            title: homework.createdFor.detail,
+            startTime: homework.startTime,
+            endTime: homework.endTime,
+            duration: homework.duration,
+            attempted: homework.sessionTestSubmission.length > 0,
+            submissionId: homework.sessionTestSubmission[0]?.id ?? null,
+        }));
+
+        const pagination = {
+            page: Number(page),
+            limit: LIMIT,
+            hasNext: offset + LIMIT < total,
+        };
+
+        const payload = {
+            homeworks: response,
+            pagination,
+        };
+
+        await setCache(cacheKey, payload, 600);
+
+        return res.json({
+            success: true,
+            homeworks: response,
+            pagination,
+            source: "db",
+        });
+    } catch (error) {
+        console.error("GetSessionTests error:", error);
+        return res.status(500).json({ success: false, error });
+    }
+}
+
+//questions (if not attempted)
+export async function GetSessionTestQuestions(req: Request, res: Response) {
+    const { sessionTestId, userId } = req.body;
+
+    if (!sessionTestId || !userId) {
+        return res.status(400).json({
+            success: false,
+            error: "sessionTestId or userId missing",
+        });
+    }
+
+    try {
+        const alreadyAttempted = await prisma.sessionTestSubmission.findFirst({
+            where: {
+                sessionTestId,
+                endUsersId: userId,
+            },
+            select: { id: true },
+        });
+
+        if (alreadyAttempted) {
+            return res.status(403).json({
+                success: false,
+                error: "Test already attempted",
+            });
+        }
+
+        const cacheKey = `sessionTest:questions:${sessionTestId}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({
+                success: true,
+                questions: cached,
+                source: "cache",
+            });
+        }
+
+        const questions = await prisma.sessionTestQuestion.findMany({
+            where: { sessionTestId },
+            select: {
+                id: true,
+                question: true,
+                option1: true,
+                option2: true,
+                option3: true,
+                option4: true,
+                correctResponse: true,
+            },
+            orderBy: { id: "asc" },
+        });
+
+        await setCache(cacheKey, questions, 300);
+
+        return res.json({
+            success: true,
+            questions,
+            source: "db",
+        });
+    } catch (error) {
+        console.error("GetSessionTestQuestions error:", error);
+        return res.status(500).json({ success: false, error });
+    }
+}
+
+

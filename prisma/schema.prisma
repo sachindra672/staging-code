@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url  = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 model endUsers {
@@ -31,6 +31,7 @@ model endUsers {
   groupChatInfoId           Int?
   apnToken                  String?
   deviceType                DeviceType?                 @default(ANDROID)
+  isDoubtPackageFromLP      Boolean                     @default(false)
   aiRatings                 AIRating[]
   Bgreview                  Bgreview[]
   GroupMember               GroupMember[]
@@ -65,6 +66,8 @@ model endUsers {
   Comment                   Comment[]
   BlogLike                  BlogLike[]
   sisyaClassQuizResponses   sisyaClassQuizResponse[]
+  recordingWatchProgress    RecordingWatchProgress[]
+  slotBookings              doubtSlotBooking[]          @relation("studentSlotBookings")
 }
 
 model mentor {
@@ -88,6 +91,9 @@ model mentor {
   phone                   String                    @db.VarChar(13)
   subjectId               Int?
   deviceId                String                    @default("")
+
+  isDoubtSpecialist       Boolean                   @default(false)
+  isAvailableForDoubts    Boolean                   @default(true)
   ApproverAssignment      ApproverAssignment[]
   AuditLog                AuditLog[]
   approvedContents        Content[]                 @relation("ContentApprover")
@@ -116,6 +122,9 @@ model mentor {
   session                 session[]
   subjectRecord           subjectRecord[]
   teacherAttendanceRecord teacherAttendanceRecord[]
+  doubtSlots              doubtSlot[]               @relation("mentorDoubtSlots")
+  slotBookings            doubtSlotBooking[]        @relation("mentorSlotBookings")
+  slotInstances           doubtSlotInstance[]       @relation("mentorSlotInstances")
 }
 
 model testmodelNewMigration {
@@ -277,20 +286,21 @@ model submission {
 }
 
 model doubt {
-  id             Int             @id @default(autoincrement())
-  createdOn      DateTime        @default(now())
-  modifiedOn     DateTime        @default(now())
+  id             Int               @id @default(autoincrement())
+  createdOn      DateTime          @default(now())
+  modifiedOn     DateTime          @default(now())
   description    String
-  subject        String          @db.VarChar(255)
-  topic          String          @db.VarChar(255)
+  subject        String            @db.VarChar(255)
+  topic          String            @db.VarChar(255)
   status         Int
   userId         Int
   mentorId       Int?
   conversationId Int?
-  assignee       mentor?         @relation(fields: [mentorId], references: [id])
-  asker          endUsers        @relation(fields: [userId], references: [id])
+  assignee       mentor?           @relation(fields: [mentorId], references: [id])
+  asker          endUsers          @relation(fields: [userId], references: [id])
   doubtResponse  doubtResponse[]
   subjectRecord  subjectRecord[]
+  slotBooking    doubtSlotBooking?
 }
 
 model doubtResponse {
@@ -302,6 +312,76 @@ model doubtResponse {
   mentorId   Int
   to         doubt    @relation(fields: [doubtId], references: [id])
   by         mentor   @relation(fields: [mentorId], references: [id])
+}
+
+model doubtSlot {
+  id              Int      @id @default(autoincrement())
+  mentorId        Int
+  dayOfWeek       String   @db.VarChar(20)
+  startTime       DateTime
+  endTime         DateTime
+  maxCapacity     Int      @default(1)
+  currentBookings Int      @default(0)
+  isAvailable     Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdOn       DateTime @default(now())
+  modifiedOn      DateTime @default(now())
+
+  slotInstances doubtSlotInstance[]
+
+  mentor       mentor             @relation("mentorDoubtSlots", fields: [mentorId], references: [id])
+  bookedDoubts doubtSlotBooking[]
+
+  @@index([mentorId])
+  @@index([isAvailable])
+}
+
+model doubtSlotInstance {
+  id              Int      @id @default(autoincrement())
+  slotId          Int // Reference to parent recurring slot
+  mentorId        Int
+  startTime       DateTime // Specific date/time for this instance
+  endTime         DateTime // Specific date/time for this instance
+  maxCapacity     Int      @default(1)
+  currentBookings Int      @default(0)
+  isAvailable     Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdOn       DateTime @default(now())
+  modifiedOn      DateTime @default(now())
+
+  slot         doubtSlot          @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  mentor       mentor             @relation("mentorSlotInstances", fields: [mentorId], references: [id])
+  bookedDoubts doubtSlotBooking[] @relation("instanceBookings")
+
+  @@index([slotId])
+  @@index([mentorId])
+  @@index([isAvailable])
+  @@index([startTime])
+}
+
+model doubtSlotBooking {
+  id          Int       @id @default(autoincrement())
+  slotId      Int? // For backward compatibility (one-time slots)
+  instanceId  Int? // For recurring slot instances
+  doubtId     Int
+  mentorId    Int
+  studentId   Int
+  status      String    @default("scheduled") // scheduled, completed, cancelled
+  completedOn DateTime?
+  createdOn   DateTime  @default(now())
+  modifiedOn  DateTime  @default(now())
+
+  slot     doubtSlot?         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  instance doubtSlotInstance? @relation("instanceBookings", fields: [instanceId], references: [id], onDelete: Cascade)
+  doubt    doubt              @relation(fields: [doubtId], references: [id], onDelete: Cascade)
+  mentor   mentor             @relation("mentorSlotBookings", fields: [mentorId], references: [id])
+  student  endUsers           @relation("studentSlotBookings", fields: [studentId], references: [id])
+
+  @@unique([doubtId])
+  @@index([slotId])
+  @@index([doubtId])
+  @@index([mentorId])
+  @@index([studentId])
 }
 
 model log {
@@ -623,6 +703,7 @@ model mgSubsciption {
   dueDate       DateTime?
   course        BigCourse @relation(fields: [bigCourseId], references: [id])
   user          endUsers  @relation(fields: [endUsersId], references: [id])
+  doubtRecord   doubtRecord?
 
   @@unique([endUsersId, bigCourseId])
 }
@@ -774,7 +855,7 @@ model TeachIntro {
 }
 
 model ctest {
-  id              Int               @id @default(autoincrement())
+  id              Int                  @id @default(autoincrement())
   title           String
   Duration        Int
   startDate       DateTime
@@ -782,14 +863,14 @@ model ctest {
   bigCourseId     Int
   subjectId       Int
   mentorId        Int
-  mode            CTestMode         @default(MCQ)
+  mode            CTestMode            @default(MCQ)
   totalMarks      Int?
-  createdOn       DateTime          @default(now())
-  modifiedOn      DateTime          @default(now())
+  createdOn       DateTime             @default(now())
+  modifiedOn      DateTime             @default(now())
   cTestResponse   cTestResponse[]
-  course          BigCourse         @relation(fields: [bigCourseId], references: [id])
-  mentor          mentor            @relation(fields: [mentorId], references: [id])
-  subject         Subject           @relation(fields: [subjectId], references: [id])
+  course          BigCourse            @relation(fields: [bigCourseId], references: [id])
+  mentor          mentor               @relation(fields: [mentorId], references: [id])
+  subject         Subject              @relation(fields: [subjectId], references: [id])
   ctestQuestions  ctestQuestions[]
   imageQuestions  ctestImageQuestion[]
   ctestSubmission ctestSubmission[]
@@ -817,12 +898,12 @@ model ctestQuestions {
 }
 
 model ctestSubmission {
-  id            Int             @id @default(autoincrement())
-  createAt      DateTime        @default(now())
+  id            Int                   @id @default(autoincrement())
+  createAt      DateTime              @default(now())
   ctestId       Int
   endUsersId    Int
-  createdOn     DateTime        @default(now())
-  modifiedOn    DateTime        @default(now())
+  createdOn     DateTime              @default(now())
+  modifiedOn    DateTime              @default(now())
   status        CTestSubmissionStatus @default(IN_PROGRESS)
   submittedAt   DateTime?
   gradedAt      DateTime?
@@ -831,8 +912,8 @@ model ctestSubmission {
   awardedMarks  Int?
   gradingNote   String?
   cTestResponse cTestResponse[]
-  ctest         ctest           @relation(fields: [ctestId], references: [id])
-  user          endUsers        @relation(fields: [endUsersId], references: [id])
+  ctest         ctest                 @relation(fields: [ctestId], references: [id])
+  user          endUsers              @relation(fields: [endUsersId], references: [id])
   imageAnswers  ctestImageAnswer[]
 }
 
@@ -854,33 +935,33 @@ model cTestResponse {
 }
 
 model ctestImageQuestion {
-  id               Int      @id @default(autoincrement())
-  ctestId          Int
-  prompt           String?
-  instructions     String?
-  questionImages   String[] @default([])
-  maxMarks         Int
-  maxAnswerImages  Int      @default(5)
-  sortOrder        Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  test             ctest    @relation(fields: [ctestId], references: [id])
-  answers          ctestImageAnswer[]
+  id              Int                @id @default(autoincrement())
+  ctestId         Int
+  prompt          String?
+  instructions    String?
+  questionImages  String[]           @default([])
+  maxMarks        Int
+  maxAnswerImages Int                @default(5)
+  sortOrder       Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  test            ctest              @relation(fields: [ctestId], references: [id])
+  answers         ctestImageAnswer[]
 }
 
 model ctestImageAnswer {
-  id            Int      @id @default(autoincrement())
+  id            Int                @id @default(autoincrement())
   submissionId  Int
   questionId    Int
-  answerImages  String[] @default([])
+  answerImages  String[]           @default([])
   notes         String?
   awardedMarks  Int?
   reviewedBy    Int?
   reviewedAt    DateTime?
   reviewComment String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  submission    ctestSubmission @relation(fields: [submissionId], references: [id])
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  submission    ctestSubmission    @relation(fields: [submissionId], references: [id])
   question      ctestImageQuestion @relation(fields: [questionId], references: [id])
 
   @@unique([submissionId, questionId])
@@ -1002,12 +1083,12 @@ model defaultHolidays {
 model inq {
   id             Int      @id @default(autoincrement())
   name           String
-  email          String
+  email          String   @default("sisya@sisyaclass.com")
   phone          String
-  message        String
+  message        String   @default("Trial enquiry submitted")
   createOn       DateTime @default(now())
   updateOn       DateTime @default(now())
-  isTrialRequest Boolean
+  isTrialRequest Boolean  @default(true)
   targetClass    String?
   classBoard     String?
 }
@@ -1065,22 +1146,49 @@ model assetRecords {
 model doubtRecord {
   id                    Int                     @id @default(autoincrement())
   doubtsAsked           Int                     @default(0)
-  doubtsRemaining       Int                     @default(5)
+  doubtsRemaining       Int                     @default(5)  // Purchased doubts only
   endUsersId            Int
+  // Monthly benefit fields
+  linkedSubscriptionId  Int?                    @unique
+  monthlyDoubtAllowance Int                    @default(15)
+  monthlyDoubtsRemaining Int                   @default(0)  // Monthly benefit doubts (separate from purchased)
+  lastMonthlyResetDate  DateTime?
+  enrollmentDate        DateTime?
+  isMonthlyBenefitActive Boolean                @default(false)
   doubtPackagePurchases doubtPackagePurchases[]
   user                  endUsers                @relation(fields: [endUsersId], references: [id])
+  linkedSubscription    mgSubsciption?          @relation(fields: [linkedSubscriptionId], references: [id])
+}
+
+model doubtPackage {
+  id                    Int                     @id @default(autoincrement())
+  doubtPackageId        Int?                    @unique
+  name                  String
+  description           String?
+  doubtCount            Int
+  price                 Decimal                 @db.Decimal(10, 2)
+  discountedPrice       Decimal?                @db.Decimal(10, 2)
+  isActive              Boolean                 @default(true)
+  sortOrder             Int                     @default(0)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  doubtPackagePurchases doubtPackagePurchases[]
 }
 
 model doubtPackagePurchases {
-  id            Int         @id @default(autoincrement())
-  endUsersId    Int?
-  doubtRecordId Int
-  orderID       String?
-  DoubtCount    Int
-  createOn      DateTime    @default(now())
-  updatedOn     DateTime    @default(now())
-  record        doubtRecord @relation(fields: [doubtRecordId], references: [id])
-  endUsers      endUsers?   @relation(fields: [endUsersId], references: [id])
+  id             Int           @id @default(autoincrement())
+  endUsersId     Int?
+  doubtRecordId  Int
+  doubtPackageId Int?
+  orderID        String?
+  source         String?
+  DoubtCount     Int
+  amountPaid     Decimal?      @db.Decimal(10, 2)
+  createOn       DateTime      @default(now())
+  updatedOn      DateTime      @default(now())
+  record         doubtRecord   @relation(fields: [doubtRecordId], references: [id])
+  endUsers       endUsers?     @relation(fields: [endUsersId], references: [id])
+  package        doubtPackage? @relation(fields: [doubtPackageId], references: [id])
 }
 
 model groupChatInfo {
@@ -1114,6 +1222,8 @@ model RegterationLeads {
   alternatePhone    String?
   preffredLanguage  String?
   leadQuizResponses LeadQuizResponse[]
+
+  @@index([phone])
 }
 
 model LeadQuizQuestion {
@@ -2185,10 +2295,10 @@ model SisyaAvatar {
   priceCoins    Decimal
   originalCoins Decimal?
 
-  isActive  Boolean @default(true)
-  isLimited Boolean @default(false)
+  isActive    Boolean @default(true)
+  isLimited   Boolean @default(false)
   totalSupply Int?
-  metadata  Json?
+  metadata    Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2232,7 +2342,7 @@ model SisyaStoreOrder {
 
   status StoreOrderStatus @default(PENDING)
 
-  address Json?
+  address     Json?
   metadata    Json?
   createdAt   DateTime  @default(now())
   completedAt DateTime?
@@ -2343,4 +2453,60 @@ model sisyaClassQuizResponse {
   @@index([userId])
   @@index([quizId, userId])
   @@map("sisya_class_quiz_response")
+}
+
+model RecordingWatchProgress {
+  id Int @id @default(autoincrement())
+
+  endUsersId Int
+  user       endUsers @relation(fields: [endUsersId], references: [id])
+
+  contentType String
+  contentId   String
+
+  totalDuration Int @default(0)
+
+  hasPlayed     Boolean   @default(false)
+  firstPlayedAt DateTime?
+
+  totalUniqueWatchTime Int       @default(0)
+  maxProgress          Int       @default(0)
+  lastPlayedAt         DateTime?
+
+  // Completion tracking
+  completionPercentage Float     @default(0)
+  isCompleted          Boolean   @default(false)
+  completedAt          DateTime?
+
+  // Reward tracking
+  rewardGiven   Boolean   @default(false)
+  rewardGivenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  segments RecordingWatchSegment[]
+
+  @@unique([endUsersId, contentType, contentId])
+  @@index([endUsersId])
+  @@index([contentType, contentId])
+  @@index([isCompleted])
+  @@index([rewardGiven])
+}
+
+model RecordingWatchSegment {
+  id Int @id @default(autoincrement())
+
+  watchProgressId Int
+  watchProgress   RecordingWatchProgress @relation(fields: [watchProgressId], references: [id], onDelete: Cascade)
+
+  startTime Int
+  endTime   Int
+
+  watchedAt DateTime @default(now())
+
+  duration Int // endTime - startTime
+
+  @@index([watchProgressId])
+  @@index([watchedAt])
 }

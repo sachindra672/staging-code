@@ -3,6 +3,7 @@ import { Request, Response } from 'express'
 import { generateToken04 } from './zego'
 import { randomUUID } from 'crypto'
 import { createClassVM, deleteClassVM } from './vm_management/vm';
+import { invalidateCache } from './utils/cacheUtils';
 
 const appId = 1500762473; // Your App ID
 const serverSecret = "175fa0e5958efde603f2ec805c7d6120";
@@ -23,6 +24,9 @@ export async function InsertNewSession(req: Request, res: Response) {
     const { mentorId, startTime, endTime, bigCourseId, detail, subjectId, description } = req.body
     try {
         const nsession = await prisma.session.create({ data: { mentorId, startTime, endTime, bigCourseId, detail, subjectId, description } })
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
+
         res.json({ success: true, nsession })
     } catch (error) {
         console.log(error)
@@ -40,6 +44,8 @@ export async function EditSession(req: Request, res: Response) {
                 screenRecordingTimeStamp,
             }
         })
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
         res.json({ success: true, nsession })
     } catch (error) {
         console.log(error)
@@ -100,6 +106,8 @@ export async function EditSession2(req: Request, res: Response) {
             console.error(`VM delete failed for session ${id}:`, err);
         });
 
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
         res.json({ success: true, nsession });
 
     } catch (error) {
@@ -139,6 +147,8 @@ export async function InsertNewSessionStream(req: Request, res: Response) {
         const roomId = randomUUID()
         const nsession = await prisma.sessionStreamInfo.create({ data: { sessionId, Token, roomId, vmIp: 'sisyaclass.xyz' } })
         const updatedSession = await prisma.session.update({ where: { id: sessionId }, data: { isGoingOn: true, roomId, tokenId: Token, vmIp: 'sisyaclass.xyz' } })
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
         res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
     } catch (error) {
         console.log(error)
@@ -167,6 +177,8 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
             const roomId = randomUUID()
             const nsession = await prisma.sessionStreamInfo.create({ data: { sessionId, Token, roomId, vmIp: socket_url } })
             const updatedSession = await prisma.session.update({ where: { id: sessionId }, data: { isGoingOn: true, roomId, tokenId: Token, vmIp: socket_url } })
+            await invalidateCache('bigCourses:upcomingSessions:*');
+            await invalidateCache('bigCourses:completedSessions:*');
             res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
         } else {
 
@@ -175,6 +187,8 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
             const nsession = await prisma.sessionStreamInfo.create({ data: { sessionId, Token, roomId, vmIp: session.vmIp } })
             const updatedSession = await prisma.session.update({ where: { id: sessionId }, data: { isGoingOn: true, roomId, tokenId: Token, vmIp: session.vmIp } })
             console.log("vm exists, url is ", session.vmIp);
+            await invalidateCache('bigCourses:upcomingSessions:*');
+            await invalidateCache('bigCourses:completedSessions:*');
             res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
         }
     } catch (error) {
@@ -182,8 +196,6 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
         res.json({ success: false, error })
     }
 }
-
-
 
 export async function recordingUploadedWebhook(req: Request, res: Response) {
     try {
@@ -214,6 +226,9 @@ export async function recordingUploadedWebhook(req: Request, res: Response) {
         });
 
         console.log("Recording URL saved:", sessionId);
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
+        await invalidateCache('bigCourses:recordings:*');
 
         return res.json({ success: true });
     } catch (error: any) {
@@ -449,6 +464,8 @@ export const deleteSession = async (req: Request, res: Response) => {
             });
         });
 
+        await invalidateCache('bigCourses:upcomingSessions:*');
+        await invalidateCache('bigCourses:completedSessions:*');
         return res.status(200).json({ message: "Session deleted successfully" });
     } catch (error: any) {
         console.error("Error deleting session:", error);

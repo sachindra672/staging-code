@@ -230,14 +230,18 @@ export async function deleteStoreItemAdmin(req: Request, res: Response) {
             });
         }
 
+        const newStatus = !item.isActive;
+
         const updatedItem = await prisma.sisyaStoreItem.update({
             where: { id: itemId },
-            data: { isActive: false },
+            data: { isActive: newStatus },
         });
 
         return res.json({
             success: true,
-            message: "Store item deactivated successfully",
+            message: newStatus
+                ? "Store item activated successfully"
+                : "Store item deactivated successfully",
             data: updatedItem,
         });
     } catch (error) {

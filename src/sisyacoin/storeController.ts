@@ -2,6 +2,40 @@ import { Request, Response } from "express";
 import { prisma } from "../misc";
 import { Decimal } from "@prisma/client/runtime/library";
 import { applyTransaction, ensureWallet, spendWithExpiryFirst } from "../config/sisyacoinHelperFunctions";
+import { Storage } from "@google-cloud/storage";
+import { nanoid } from "nanoid";
+
+const storage = new Storage({
+    projectId: process.env.GCP_PROJECT_ID,
+    keyFilename: process.env.GCP_KEYFILE_PATH,
+});
+
+const bucket = storage.bucket(process.env.GCP_BUCKET!);
+
+// Admin: Generate upload URL for store item image
+export const generateStoreItemUploadUrl = async (_req: Request, res: Response) => {
+    try {
+        const date = new Date();
+        const fileName = `store-items/${nanoid()}-${date.getTime()}.jpeg`;
+        const file = bucket.file(fileName);
+
+        const [url] = await file.getSignedUrl({
+            version: "v4",
+            action: "write",
+            expires: Date.now() + 10 * 60 * 1000,
+            contentType: "image/*",
+        });
+
+        res.json({
+            success: true,
+            uploadUrl: url,
+            filePath: `https://storage.googleapis.com/${process.env.GCP_BUCKET}/${fileName}`,
+        });
+    } catch (err) {
+        console.error("Error generating store item upload URL:", err);
+        res.status(500).json({ success: false, error: "Failed to generate upload URL" });
+    }
+};
 
 // Get active store items
 export async function getStoreItems(req: Request, res: Response) {
@@ -487,6 +521,31 @@ export async function createOrder2(req: Request, res: Response) {
                 }
             });
 
+            // Credit the spent coins back to the system wallet
+            const systemWallet = await tx.sisyaWallet.findUnique({
+                where: {
+                    ownerType_ownerId: {
+                        ownerType: "SYSTEM",
+                        ownerId: 0
+                    }
+                }
+            });
+
+            if (!systemWallet) {
+                throw new Error("System wallet not found");
+            }
+
+            const systemBalanceBefore = systemWallet.spendableBalance;
+            const systemBalanceAfter = systemBalanceBefore.plus(totalCoins);
+
+            await tx.sisyaWallet.update({
+                where: { id: systemWallet.id },
+                data: {
+                    spendableBalance: systemBalanceAfter,
+                    totalEarned: systemWallet.totalEarned.plus(totalCoins)
+                }
+            });
+
             // Create order first to get order ID for transaction metadata
             const orderData: any = {
                 walletId: wallet.id,
@@ -554,6 +613,25 @@ export async function createOrder2(req: Request, res: Response) {
                         items: itemsDetails,
                         expiryUsed: expiryUsed.toString(),
                         normalUsed: normalUsed.toString()
+                    }
+                }
+            });
+
+            // Log corresponding credit transaction for system wallet
+            await tx.sisyaTransaction.create({
+                data: {
+                    walletId: systemWallet.id,
+                    type: "TRANSFER",
+                    status: "COMPLETED",
+                    amount: totalCoins,
+                    fee: new Decimal(0),
+                    balanceBefore: systemBalanceBefore,
+                    balanceAfter: systemBalanceAfter,
+                    balanceType: "SPENDABLE",
+                    counterpartyWalletId: wallet.id,
+                    metadata: {
+                        reason: `Store order receipt: ${itemsSummary}`,
+                        orderId: newOrder.id
                     }
                 }
             });

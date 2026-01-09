@@ -5,6 +5,7 @@ import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client';
 import { error } from 'console';
 import { createGroupForCourse } from '../courseGroupChat';
+import { invalidateCache } from '../utils/cacheUtils';
 
 interface TeachIntroData {
     comment: string;
@@ -316,6 +317,7 @@ export async function createBigCourse(req: Request, res: Response): Promise<void
         uploadImage(mainImageData, newBigCourse.id, "mcourses")
         await createGroupForCourse(newBigCourse.id);
         await prisma.announcements.create({ data: { content: `new course ${newBigCourse.name}! ` } })
+        await invalidateCache('bigCourses:*');
         res.status(201).json({ success: true, bigCourse: newBigCourse });
     } catch (error) {
         console.error('Error creating BigCourse:', error);
@@ -641,6 +643,7 @@ export async function updateBigCourse2(req: Request, res: Response) {
         }
 
         console.log(`[updateBigCourse] Finished successfully, sending response...`);
+        await invalidateCache('bigCourses:*');
         res.status(200).json({ success: true, bigCourse: updatedBigCourse });
     } catch (error: unknown) {
         console.error(`[updateBigCourse] ERROR at ${new Date().toISOString()}:`, error);

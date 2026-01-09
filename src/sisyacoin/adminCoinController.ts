@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../misc";
 import { Decimal } from "@prisma/client/runtime/library";
-import { applyTransaction, getSystemWallet } from "../config/sisyacoinHelperFunctions";
+import { applyTransaction, getSystemWallet, ensureWallet } from "../config/sisyacoinHelperFunctions";
 
 // mint the coin into the system wallet 
 export async function mintCoins(req: Request, res: Response) {
@@ -73,6 +73,156 @@ export async function mintCoins(req: Request, res: Response) {
         });
     } catch (error) {
         console.error("Error minting coins:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+}
+
+// Admin: directly assign coins from System wallet to an End User wallet
+// Body: { adminId, toUserId, amount, reason? }
+export async function adminAssignCoinsToUser(req: Request, res: Response) {
+    try {
+        const { adminId, toUserId, amount, reason } = req.body;
+
+        if (!adminId) {
+            return res.status(400).json({ success: false, message: "adminId is required in request body" });
+        }
+        if (!toUserId) {
+            return res.status(400).json({ success: false, message: "toUserId is required in request body" });
+        }
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, message: "Valid amount is required" });
+        }
+
+        const adminIdNum = typeof adminId === "number" ? adminId : parseInt(adminId);
+        const toUserIdNum = typeof toUserId === "number" ? toUserId : parseInt(toUserId);
+
+        if (isNaN(adminIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid adminId" });
+        }
+        if (isNaN(toUserIdNum)) {
+            return res.status(400).json({ success: false, message: "Invalid toUserId" });
+        }
+
+        const amountDecimal = new Decimal(amount);
+        if (amountDecimal.lte(0)) {
+            return res.status(400).json({ success: false, message: "Amount must be positive" });
+        }
+
+        // Get system wallet and ensure user wallet exists
+        const systemWallet = await getSystemWallet();
+        const userWallet = await ensureWallet("ENDUSER", toUserIdNum);
+
+        // Check system wallet balance
+        if (systemWallet.spendableBalance.lt(amountDecimal)) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient balance in system wallet",
+            });
+        }
+
+        // Update system wallet (debit)
+        const sysBalanceBefore = systemWallet.spendableBalance;
+        const sysBalanceAfter = sysBalanceBefore.minus(amountDecimal);
+
+        const updatedSystemWallet = await prisma.sisyaWallet.update({
+            where: { id: systemWallet.id },
+            data: {
+                spendableBalance: sysBalanceAfter,
+                totalSpent: systemWallet.totalSpent.plus(amountDecimal),
+            },
+        });
+
+        // Update user wallet (credit)
+        const userBalanceBefore = userWallet.spendableBalance;
+        const userBalanceAfter = userBalanceBefore.plus(amountDecimal);
+
+        const updatedUserWallet = await prisma.sisyaWallet.update({
+            where: { id: userWallet.id },
+            data: {
+                spendableBalance: userBalanceAfter,
+                totalEarned: userWallet.totalEarned.plus(amountDecimal),
+            },
+        });
+
+        // Transactions (reuse MANUAL_REWARD type to match existing enum)
+        const sysTxn = await applyTransaction(
+            systemWallet.id,
+            "MANUAL_REWARD",
+            amountDecimal.negated(),
+            "SPENDABLE",
+            sysBalanceBefore,
+            sysBalanceAfter,
+            {
+                reason: reason || "Admin direct assign to user",
+                toUserId: toUserIdNum,
+                source: "SYSTEM_WALLET",
+            },
+            userWallet.id,
+            undefined,
+            "ADMIN",
+            adminIdNum
+        );
+
+        const userTxn = await applyTransaction(
+            userWallet.id,
+            "MANUAL_REWARD",
+            amountDecimal,
+            "SPENDABLE",
+            userBalanceBefore,
+            userBalanceAfter,
+            {
+                reason: reason || "Admin direct assign from system wallet",
+                fromOwnerType: "SYSTEM",
+                fromOwnerId: 0,
+                adminId: adminIdNum,
+            },
+            systemWallet.id,
+            undefined,
+            "ADMIN",
+            adminIdNum
+        );
+
+        // Audit logs for both wallets
+        await Promise.all([
+            prisma.sisyaAuditLog.create({
+                data: {
+                    walletId: systemWallet.id,
+                    action: "ADMIN_ASSIGN_SYSTEM_DEBIT",
+                    actorType: "ADMIN",
+                    actorId: adminIdNum,
+                    before: sysBalanceBefore,
+                    delta: amountDecimal.negated(),
+                    after: sysBalanceAfter,
+                    note: `Assigned ${amount} coins to endUser ${toUserIdNum}: ${reason || ""}`,
+                },
+            }),
+            prisma.sisyaAuditLog.create({
+                data: {
+                    walletId: userWallet.id,
+                    action: "ADMIN_ASSIGN_USER_CREDIT",
+                    actorType: "ADMIN",
+                    actorId: adminIdNum,
+                    before: userBalanceBefore,
+                    delta: amountDecimal,
+                    after: userBalanceAfter,
+                    note: `Received ${amount} coins from system wallet by admin ${adminIdNum}: ${reason || ""}`,
+                },
+            }),
+        ]);
+
+        return res.json({
+            success: true,
+            data: {
+                systemWallet: updatedSystemWallet,
+                userWallet: updatedUserWallet,
+                transactions: {
+                    system: sysTxn,
+                    user: userTxn,
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error assigning coins from system to user:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 }

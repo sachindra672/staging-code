@@ -3,6 +3,7 @@ import { Request, Response } from 'express'
 import { grantTaskReward } from './sisyacoin/taskRewardController'
 import { getSystemWallet } from './config/sisyacoinHelperFunctions'
 import { Decimal } from "@prisma/client/runtime/library";
+import { getCache, invalidateCache, setCache } from './utils/cacheUtils';
 
 export async function getStudentListSessionTestSubmission(req: Request, res: Response) {
     const { sessionTestId } = req.body;
@@ -332,6 +333,327 @@ export async function createSessionTestSubmission2(req: Request, res: Response):
         }
     }
 }
+
+// submit session test
+export async function submitSessionTestAttempt(
+    req: Request,
+    res: Response
+): Promise<void> {
+    const { sessionTestId, endUsersId, responses, courseId } = req.body;
+
+
+    if (
+        !sessionTestId ||
+        !endUsersId ||
+        !Array.isArray(responses) ||
+        responses.length === 0
+    ) {
+        res.status(400).json({
+            success: false,
+            error: "Invalid or missing required fields",
+        });
+        return;
+    }
+
+    const testId = Number(sessionTestId);
+    const userId = Number(endUsersId);
+
+    if (isNaN(testId) || isNaN(userId)) {
+        res.status(400).json({
+            success: false,
+            error: "Invalid sessionTestId or endUsersId",
+        });
+        return;
+    }
+
+    try {
+        const existingAttempt = await prisma.sessionTestSubmission.findFirst({
+            where: {
+                sessionTestId: testId,
+                endUsersId: userId,
+            },
+            select: { id: true },
+        });
+
+        if (existingAttempt) {
+            res.status(409).json({
+                success: false,
+                error: "Session test already attempted",
+            });
+            return;
+        }
+
+        const sessionTest = await prisma.sessionTest.findUnique({
+            where: { id: testId },
+            include: {
+                sessionTestQuestion: true,
+            },
+        });
+
+        if (!sessionTest) {
+            res.status(404).json({
+                success: false,
+                error: "Session test not found",
+            });
+            return;
+        }
+
+        const questionsMap = new Map(
+            sessionTest.sessionTestQuestion.map((q) => [q.id, q])
+        );
+
+        for (const r of responses) {
+            if (
+                !r.sessionTestQuestionId ||
+                !questionsMap.has(Number(r.sessionTestQuestionId))
+            ) {
+                res.status(400).json({
+                    success: false,
+                    error: "Invalid question in responses",
+                });
+                return;
+            }
+        }
+
+        const submission = await prisma.$transaction(async (tx) => {
+            return tx.sessionTestSubmission.create({
+                data: {
+                    sessionTestId: testId,
+                    endUsersId: userId,
+                    sessionTestResponse: {
+                        create: responses.map((r: any) => ({
+                            forQuestion: { connect: { id: Number(r.sessionTestQuestionId) } },
+                            response: r.response,
+                            forTest: { connect: { id: testId } },
+                            createdBy: { connect: { id: userId } },
+                        })),
+                    },
+                },
+                include: {
+                    sessionTestResponse: true,
+                },
+            });
+        });
+
+        // Calculate marks/score
+        let correct = 0;
+        const total = sessionTest.sessionTestQuestion.length;
+
+        submission.sessionTestResponse.forEach((resp) => {
+            const q = questionsMap.get(resp.sessionTestQuestionId);
+            if (q && resp.response === q.correctResponse) {
+                correct++;
+            }
+        });
+
+        const marks = {
+            correct,
+            total,
+            score: `${correct}/${total}`,
+            percentage: total > 0 ? Math.round((correct / total) * 100) : 0,
+        };
+
+        let rewardInfo: any = null;
+
+        const now = new Date();
+        const startTime = new Date(sessionTest.startTime);
+        const endTime = new Date(sessionTest.endTime);
+
+        if (now <= endTime) {
+            let coins = 20;
+            const breakdown = {
+                base: 20,
+                earlyBonus: 0,
+                perfectScoreBonus: 0,
+            };
+
+            // Early bonus (within 3 hrs)
+            const threeHoursAfterStart = new Date(startTime);
+            threeHoursAfterStart.setHours(threeHoursAfterStart.getHours() + 3);
+
+            if (now <= threeHoursAfterStart) {
+                coins += 10;
+                breakdown.earlyBonus = 10;
+            }
+
+            // Perfect score bonus
+            if (correct === total && total > 0) {
+                coins += 15;
+                breakdown.perfectScoreBonus = 15;
+            }
+
+            const systemWallet = await getSystemWallet();
+            const coinsDecimal = new Decimal(coins);
+
+            if (systemWallet.spendableBalance.gte(coinsDecimal)) {
+                const rewardReq = {
+                    body: {
+                        userId,
+                        taskCode: `SESSION_TEST_${testId}`,
+                        coinsAmount: coins,
+                        reason: `Session test completed (${correct}/${total})`,
+                        metadata: {
+                            sessionTestId: testId,
+                            score: `${correct}/${total}`,
+                        },
+                    },
+                } as Request;
+
+                let rewardResponse: any = null;
+                const rewardRes = {
+                    json: (data: any) => (rewardResponse = data),
+                    status: () => ({
+                        json: (data: any) => (rewardResponse = data),
+                    }),
+                } as unknown as Response;
+
+                await grantTaskReward(rewardReq, rewardRes);
+
+                rewardInfo = rewardResponse?.success
+                    ? { coinsEarned: coins, breakdown, score: `${correct}/${total}` }
+                    : { coinsEarned: 0 };
+            }
+        }
+
+        if (courseId) {
+            await invalidateCache(`course:sessionTests:${courseId}:user:${userId}:page:*`);
+        }
+
+        await invalidateCache(`sessionTest:view:${testId}:user:${userId}`);
+
+        res.status(201).json({
+            success: true,
+            submission,
+            marks,
+            reward: rewardInfo,
+        });
+    } catch (error) {
+        console.error("submitSessionTestAttempt error:", error);
+        res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
+    }
+}
+
+export async function viewSubmittedSessionTest(
+    req: Request,
+    res: Response
+): Promise<void> {
+    const { sessionTestId, endUsersId } = req.body;
+
+    if (!sessionTestId || !endUsersId) {
+        res.status(400).json({
+            success: false,
+            error: "sessionTestId and endUsersId are required",
+        });
+        return;
+    }
+
+    const testId = Number(sessionTestId);
+    const userId = Number(endUsersId);
+
+    if (isNaN(testId) || isNaN(userId) || testId <= 0 || userId <= 0) {
+        res.status(400).json({
+            success: false,
+            error: "Invalid ids",
+        });
+        return;
+    }
+
+    const cacheKey = `sessionTest:view:${testId}:user:${userId}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            res.json({
+                success: true,
+                data: cached,
+                source: "cache",
+            });
+            return;
+        }
+
+        const submission = await prisma.sessionTestSubmission.findFirst({
+            where: {
+                sessionTestId: testId,
+                endUsersId: userId,
+            },
+            include: {
+                sessionTestResponse: true,
+                test: {
+                    include: {
+                        sessionTestQuestion: true,
+                    },
+                },
+            },
+        });
+
+        if (!submission) {
+            res.status(404).json({
+                success: false,
+                error: "Session test not attempted yet",
+            });
+            return;
+        }
+
+        const responseMap = new Map(
+            submission.sessionTestResponse.map((r) => [
+                r.sessionTestQuestionId,
+                r.response,
+            ])
+        );
+
+        let correctCount = 0;
+
+        const questions = submission.test.sessionTestQuestion.map((q) => {
+            const userAnswer = responseMap.get(q.id) ?? null;
+            const isCorrect = userAnswer === q.correctResponse;
+
+            if (isCorrect) correctCount++;
+
+            return {
+                id: q.id,
+                question: q.question,
+                options: {
+                    option1: q.option1,
+                    option2: q.option2,
+                    option3: q.option3,
+                    option4: q.option4,
+                },
+                correctAnswer: q.correctResponse,
+                userAnswer,
+                isCorrect,
+            };
+        });
+
+        const totalQuestions = questions.length;
+        const result = {
+            sessionTestId: testId,
+            attemptedAt: submission.createdOn,
+            totalQuestions,
+            correctAnswers: correctCount,
+            score: `${correctCount}/${totalQuestions}`,
+            percentage: totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0,
+            questions,
+        };
+
+        await setCache(cacheKey, result, 3600);
+
+        res.json({
+            success: true,
+            data: result,
+            source: "db",
+        });
+    } catch (error) {
+        console.error("viewSubmittedSessionTest error:", error);
+        res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
+    }
+}
+
 
 export async function GetMySessionTestSubmission(req: Request, res: Response) {
     const { sessionId, endUsersId } = req.body;

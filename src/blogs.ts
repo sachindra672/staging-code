@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 
 const storage = new Storage({
     projectId: process.env.GCP_PROJECT_ID,
-    keyFilename: process.env.GCP_KEYFILE_PATH, 
+    keyFilename: process.env.GCP_KEYFILE_PATH,
 });
 
 const bucket = storage.bucket(process.env.GCP_BUCKET!);
@@ -21,7 +21,7 @@ export const generateBlogAssetUploadUrl = async (_req: Request, res: Response) =
         const [url] = await file.getSignedUrl({
             version: 'v4',
             action: 'write',
-            expires: Date.now() + 10 * 60 * 1000, 
+            expires: Date.now() + 10 * 60 * 1000,
             contentType: 'image/*',
         });
 
@@ -332,6 +332,58 @@ export const getAllTags = async (_req: Request, res: Response) => {
     }
 };
 
+export const getTopTags = async (_req: Request, res: Response) => {
+    try {
+        const cacheKey = "tags:top:10";
+        const cached = await getCache(cacheKey);
+        if (cached) return res.json(cached);
+
+        // Count how many blogs use each tag
+        const tagUsage = await prisma.blogTag.groupBy({
+            by: ["tagId"],
+            _count: {
+                blogId: true,
+            },
+            orderBy: {
+                _count: {
+                    blogId: "desc",
+                },
+            },
+            take: 10,
+        });
+
+        if (!tagUsage.length) {
+            await setCache(cacheKey, [], 600);
+            return res.json([]);
+        }
+
+        const tagIds = tagUsage.map(t => t.tagId);
+
+        const tags = await prisma.tag.findMany({
+            where: { id: { in: tagIds } },
+        });
+
+        // Preserve order by usage count
+        const tagsById = new Map(tags.map(t => [t.id, t]));
+        const result = tagUsage
+            .map(tu => {
+                const tag = tagsById.get(tu.tagId);
+                if (!tag) return null;
+                return {
+                    ...tag,
+                    usageCount: tu._count.blogId,
+                };
+            })
+            .filter(Boolean);
+
+        await setCache(cacheKey, result, 600);
+        res.json(result);
+    } catch (err) {
+        console.error("Error fetching top tags:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
 export const deleteTag = async (req: Request, res: Response) => {
     try {
         const { tagId } = req.body;
@@ -370,7 +422,7 @@ export const getBlogsByTag = async (req: Request, res: Response) => {
 
         const blogs = await prisma.blog.findMany({
             where: {
-                deleted: false, 
+                deleted: false,
                 tags: {
                     some: { tagId }
                 }
@@ -443,7 +495,7 @@ export const getTrendingBlogs = async (_req: Request, res: Response) => {
                 activityReads: true,
                 tags: { include: { tag: true } },
             },
-            where: { deleted: false },  
+            where: { deleted: false },
             orderBy: {
                 publishedAt: 'desc',
             },

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../misc";
 import { Decimal } from "@prisma/client/runtime/library";
+import { getSystemWallet } from "../config/sisyacoinHelperFunctions";
 
 
 export async function getAllTransactionsAdmin(req: Request, res: Response) {
@@ -278,11 +279,7 @@ export async function getTransactionAnalytics(req: Request, res: Response) {
     }
 }
 
-// ============================================
-// AUDIT LOGS MANAGEMENT
-// ============================================
 
-// Get all audit logs (Admin)
 export async function getAllAuditLogsAdmin(req: Request, res: Response) {
     try {
         const {
@@ -525,6 +522,192 @@ export async function getAuditLogStats(req: Request, res: Response) {
         });
     } catch (error) {
         console.error("Error getting audit log stats:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+}
+
+// Dashboard Statistics
+export async function getDashboardStats(_req: Request, res: Response) {
+    try {
+        // Get system wallet
+        const systemWallet = await getSystemWallet();
+
+        // Calculate total coins in circulation (sum of all spendable balances excluding system wallet)
+        const allWallets = await prisma.sisyaWallet.findMany({
+            where: {
+                ownerType: { not: "SYSTEM" }
+            },
+            select: {
+                spendableBalance: true,
+                ownerType: true,
+                totalEarned: true,
+                totalSpent: true,
+            }
+        });
+
+        // Total coins in circulation
+        const totalCoinsInCirculation = allWallets.reduce(
+            (sum, wallet) => sum.plus(wallet.spendableBalance),
+            new Decimal(0)
+        );
+
+        // Total earned and spent by users (ENDUSER only)
+        const userWallets = allWallets.filter(w => w.ownerType === "ENDUSER");
+        const totalEarnedByUsers = userWallets.reduce(
+            (sum, wallet) => sum.plus(wallet.totalEarned),
+            new Decimal(0)
+        );
+        const totalSpentByUsers = userWallets.reduce(
+            (sum, wallet) => sum.plus(wallet.totalSpent),
+            new Decimal(0)
+        );
+
+        // Active wallets count by owner type
+        const activeWallets = {
+            ENDUSER: allWallets.filter(w => w.ownerType === "ENDUSER").length,
+            MENTOR: allWallets.filter(w => w.ownerType === "MENTOR").length,
+            SALESMAN: allWallets.filter(w => w.ownerType === "SALESMAN").length,
+            ADMIN: allWallets.filter(w => w.ownerType === "ADMIN").length,
+        };
+
+        // Total minted and burned
+        const mintTransactions = await prisma.sisyaTransaction.findMany({
+            where: {
+                type: "MINT",
+                status: "COMPLETED"
+            },
+            select: {
+                amount: true
+            }
+        });
+
+        const burnTransactions = await prisma.sisyaTransaction.findMany({
+            where: {
+                type: "BURN",
+                status: "COMPLETED"
+            },
+            select: {
+                amount: true
+            }
+        });
+
+        const totalMinted = mintTransactions.reduce(
+            (sum, tx) => sum.plus(tx.amount.abs()),
+            new Decimal(0)
+        );
+
+        const totalBurned = burnTransactions.reduce(
+            (sum, tx) => sum.plus(tx.amount.abs()),
+            new Decimal(0)
+        );
+
+        // Today's date range
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Today's transactions
+        const todayTransactions = await prisma.sisyaTransaction.findMany({
+            where: {
+                createdAt: {
+                    gte: today,
+                    lt: tomorrow
+                },
+                status: "COMPLETED"
+            },
+            select: {
+                type: true,
+                amount: true
+            }
+        });
+
+        const todayVolume = todayTransactions.reduce(
+            (sum, tx) => sum.plus(tx.amount.abs()),
+            new Decimal(0)
+        );
+
+        // Today's rewards given (TASK_REWARD, MANUAL_REWARD)
+        const todayRewardsGiven = todayTransactions
+            .filter(tx => tx.type === "TASK_REWARD" || tx.type === "MANUAL_REWARD")
+            .reduce((sum, tx) => sum.plus(tx.amount.abs()), new Decimal(0));
+
+        // Today's purchases (PURCHASE_ITEM)
+        const todayPurchases = todayTransactions
+            .filter(tx => tx.type === "PURCHASE_ITEM")
+            .reduce((sum, tx) => sum.plus(tx.amount.abs()), new Decimal(0));
+
+        // Today's transfers
+        const todayTransfers = todayTransactions
+            .filter(tx => tx.type === "TRANSFER")
+            .reduce((sum, tx) => sum.plus(tx.amount.abs()), new Decimal(0));
+
+        // Pending transactions
+        const pendingTransactions = await prisma.sisyaTransaction.count({
+            where: {
+                status: "PENDING"
+            }
+        });
+
+        // Pending orders
+        const pendingOrders = await prisma.sisyaStoreOrder.count({
+            where: {
+                status: "PENDING"
+            }
+        });
+
+        // Low stock items (stock <= 10)
+        const lowStockItems = await prisma.sisyaStoreItem.count({
+            where: {
+                stock: {
+                    lte: 10
+                },
+                isActive: true
+            }
+        });
+
+        // Expiring rewards (expiring within 7 days)
+        const sevenDaysFromNow = new Date();
+        sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+        const expiringRewards = await prisma.sisyaExpiryBalance.count({
+            where: {
+                expiresAt: {
+                    lte: sevenDaysFromNow,
+                    gte: today
+                },
+                isExpired: false
+            }
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                totalCoinsInCirculation: totalCoinsInCirculation.toString(),
+                systemWalletBalance: systemWallet.spendableBalance.toString(),
+                totalMinted: totalMinted.toString(),
+                totalBurned: totalBurned.toString(),
+                totalEarnedByUsers: totalEarnedByUsers.toString(),
+                totalSpentByUsers: totalSpentByUsers.toString(),
+                activeWallets,
+                todayTransactions: {
+                    count: todayTransactions.length,
+                    volume: todayVolume.toString(),
+                    rewardsGiven: todayRewardsGiven.toString(),
+                    purchases: todayPurchases.toString(),
+                    transfers: todayTransfers.toString(),
+                },
+                pendingTransactions,
+                pendingOrders,
+                lowStockItems,
+                expiringRewards,
+            },
+        });
+    } catch (error) {
+        console.error("Error getting dashboard stats:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error",
