@@ -250,7 +250,7 @@ export async function verifyOtpLoginUser(req: Request, res: Response) {
 
         const phoneFirst4 = phone.toString().substring(0, 4);
 
-        const allowedPhoneNumbers = ["9410127088", "9871158354", "9818814909", "9871684877", "8929904104", "8690638769", "7975801504", "8469776966"];
+        const allowedPhoneNumbers = ["9410127088", "9871158354", "9818814909", "9871684877", "8929904104", "8690638769", "7975801504", "8469776966","9966991947"];
 
         const isPhoneAllowed = allowedPhoneNumbers.includes(phone.toString());
 

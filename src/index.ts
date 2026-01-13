@@ -141,7 +141,8 @@ import {
   cancelSlotBooking,
   completeSlotBooking,
   getMentorSlotBookings,
-  getStudentSlotBookings
+  getStudentSlotBookings,
+  getAvailableDoubtSlots2
 } from './doubtSlots';
 import { UploadAssignments, UploadCourseMaterials } from "./uploads"
 import { DeleteCourse, DeleteSchedules, GetLtCourseCatalog, GetLtCourseCatalogBySubject, InsertLtCourse, InsertSchedule } from './ltCourse';
@@ -629,7 +630,8 @@ app.post("/admin/update_doubt_slot", authAdmin, updateDoubtSlot)
 app.post("/admin/delete_doubt_slot", authAdmin, deleteDoubtSlot)
 app.post("/admin/get_slot_bookings", authAdmin, getMentorSlotBookings)
 
-app.post("/get_available_doubt_slots", authUser, getAvailableDoubtSlots)
+app.post("/get_available_doubt_slots", authUser, getAvailableDoubtSlots2)
+app.post("/get_available_doubt_slots2", authUser, getAvailableDoubtSlots2)
 app.post("/book_doubt_slot", authUser, bookDoubtSlot)
 app.post("/get_my_doubt_slot_bookings", authUser, getStudentSlotBookings)
 

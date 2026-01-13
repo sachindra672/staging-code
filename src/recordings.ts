@@ -83,10 +83,20 @@ export async function updateRecordingUrl(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: 'Invalid recording type' });
     }
 
-    await prisma.session.update({
+    const session = await prisma.session.update({
       where: { id: Number(sessionId) },
       data: updateData,
+      select: { bigCourseId: true },
     });
+
+    // Invalidate cache for recordings
+    const { invalidateCache } = await import('./utils/cacheUtils');
+    await invalidateCache('bigCourses:recordings:*');
+    await invalidateCache('bigCourses:recordings:search:*');
+    if (session?.bigCourseId) {
+      await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+      await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+    }
 
     return res.json({ success: true, message: 'Recording URL updated successfully' });
   } catch (error) {

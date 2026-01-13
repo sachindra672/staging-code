@@ -34,6 +34,9 @@ export async function InsertSessionTests(req: Request, res: Response) {
             }
         });
 
+        // Invalidate cache for session test questions
+        await invalidateCache(`sessionTest:questions:${sessionTest.id}`);
+
         res.status(201).json({ success: true, sessionTest });
     } catch (error) {
         console.error('Error in InsertSessionTests:', error);
@@ -102,6 +105,9 @@ export async function InsertSessionTests2(req: Request, res: Response) {
             }
         });
 
+        // Invalidate cache for session test questions
+        await invalidateCache(`sessionTest:questions:${sessionTest.id}`);
+
         res.status(201).json({ success: true, sessionTest });
     } catch (error) {
         console.error('Error in InsertSessionTests2:', error);
@@ -150,6 +156,9 @@ export async function InsertSessionTestQuestions(req: Request, res: Response) {
                 correctResponse
             }
         });
+
+        // Invalidate cache for session test questions
+        await invalidateCache(`sessionTest:questions:${sessionTestId}`);
 
         res.status(201).json({ success: true, sessionTestQuestion });
     } catch (error) {

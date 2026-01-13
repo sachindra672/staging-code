@@ -7,7 +7,7 @@ import { grantTaskReward } from './sisyacoin/taskRewardController'
 import { getSystemWallet } from './config/sisyacoinHelperFunctions'
 import { Decimal } from "@prisma/client/runtime/library";
 import { CTestMode, CTestSubmissionStatus } from '@prisma/client';
-import { getCache, invalidateCache, setCache } from './utils/cacheUtils';
+import { invalidateCache } from './utils/cacheUtils';
 
 const storage = new Storage({
     projectId: process.env.GCP_PROJECT_ID,
@@ -256,6 +256,10 @@ export async function createCtest(req: Request, res: Response) {
             },
         });
 
+        // Invalidate cache for course test questions
+        await invalidateCache(`courseTest:questions:${newCtest.id}`);
+        await invalidateCache(`course:ctests:${bigCourseId}:*`);
+
         res.status(201).json({ success: true, newCtest });
     } catch (error) {
         console.error('Error creating ctest with questions:', error);
@@ -418,6 +422,10 @@ export async function createCtest2(req: Request, res: Response) {
             include: { ctestQuestions: true, imageQuestions: true },
         });
 
+        // Invalidate cache for course test questions
+        await invalidateCache(`courseTest:questions:${newCtest.id}`);
+        await invalidateCache(`course:ctests:${bigCourseId}:*`);
+
         res.status(201).json({ success: true, newCtest });
 
     } catch (error) {
@@ -530,6 +538,10 @@ export async function editCtest(req: Request, res: Response) {
                 ctestQuestions: true,
             },
         });
+
+        // Invalidate cache for course test questions
+        await invalidateCache(`courseTest:questions:${ctestId}`);
+        await invalidateCache(`course:ctests:${bigCourseId}:*`);
 
         return res.status(200).json({ success: true, updatedCtest });
     } catch (error) {
@@ -682,6 +694,10 @@ export async function editCtest2(req: Request, res: Response) {
             data: updateData,
             include: { ctestQuestions: true, imageQuestions: true },
         });
+
+        // Invalidate cache for course test questions
+        await invalidateCache(`courseTest:questions:${ctestId}`);
+        await invalidateCache(`course:ctests:${bigCourseId}:*`);
 
         res.json({ success: true, updated });
 
@@ -964,7 +980,7 @@ export async function createImageCtestSubmission(req: Request, res: Response) {
 }
 
 export async function submitMcqCtest(req: Request, res: Response) {
-    const { ctestId, endUsersId, responses,courseId } = req.body;
+    const { ctestId, endUsersId, responses, courseId } = req.body;
 
     if (!ctestId || !endUsersId || !Array.isArray(responses) || !responses.length) {
         return res.status(400).json({ error: "Invalid payload" });
@@ -1133,19 +1149,7 @@ export async function viewSubmittedCtest(
         return;
     }
 
-    const cacheKey = `ctest:view:${testId}:user:${userId}`;
-
     try {
-        const cached = await getCache(cacheKey);
-        if (cached) {
-            res.json({
-                success: true,
-                data: cached,
-                source: "cache",
-            });
-            return;
-        }
-
         const submission = await prisma.ctestSubmission.findFirst({
             where: {
                 ctestId: testId,
@@ -1271,22 +1275,20 @@ export async function viewSubmittedCtest(
             result.totalQuestions = totalQuestions;
             result.totalMaxMarks = totalMaxMarks;
             result.awardedMarks = totalAwardedMarks;
-            result.score = submission.status === CTestSubmissionStatus.GRADED
+            // Show score if marks have been awarded (gradedAt exists)
+            result.score = submission.gradedAt
                 ? `${totalAwardedMarks}/${totalMaxMarks}`
                 : "Pending evaluation";
             result.percentage =
-                submission.status === CTestSubmissionStatus.GRADED && totalMaxMarks > 0
+                submission.gradedAt && totalMaxMarks > 0
                     ? Math.round((totalAwardedMarks / totalMaxMarks) * 100)
                     : null;
             result.questions = questions;
         }
 
-        await setCache(cacheKey, result, 3600);
-
         res.json({
             success: true,
             data: result,
-            source: "db",
         });
     } catch (error) {
         console.error("viewSubmittedCtest error:", error);
@@ -1756,8 +1758,9 @@ export async function markImageAnswer(req: Request, res: Response) {
             return res.status(404).json({ error: 'Submission not found' });
         }
 
-        if (submission.status === CTestSubmissionStatus.GRADED) {
-            return res.status(400).json({ error: 'Cannot modify marks for a graded submission' });
+        // Check if submission has been finalized (has gradedAt timestamp)
+        if (submission.gradedAt) {
+            return res.status(400).json({ error: 'Cannot modify marks for a finalized submission' });
         }
 
         // Update the answer with marks
@@ -1828,8 +1831,8 @@ export async function finalizeImageCtestSubmission(req: Request, res: Response) 
             return res.status(400).json({ error: 'This submission is not for an image CTest' });
         }
 
-        if (submission.status === CTestSubmissionStatus.GRADED) {
-            return res.status(400).json({ error: 'Submission is already graded' });
+        if (submission.status !== CTestSubmissionStatus.SUBMITTED) {
+            return res.status(400).json({ error: 'Submission has already been finalized' });
         }
 
         // Check if all questions have been marked
@@ -1863,11 +1866,10 @@ export async function finalizeImageCtestSubmission(req: Request, res: Response) 
         // Calculate percentage-based reward (10% = 1 coin, so 60% = 6 coins)
         const percentageCoins = Math.floor(percentage / 10);
 
-        // Update submission with final marks
+        // Update submission with final marks (keep status as SUBMITTED)
         const updatedSubmission = await prisma.ctestSubmission.update({
             where: { id: submissionId },
             data: {
-                status: CTestSubmissionStatus.GRADED,
                 awardedMarks: totalAwarded,
                 gradedAt: new Date(),
                 gradedBy: gradedBy,
@@ -1976,6 +1978,8 @@ export async function finalizeImageCtestSubmission(req: Request, res: Response) 
             };
         }
 
+        await invalidateCache('ctest:view:*');
+
         res.status(200).json({
             success: true,
             submission: updatedSubmission,
@@ -2034,19 +2038,7 @@ export async function GetCourseTests(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `course:ctests:${courseId}:user:${userId}:page:${page}`;
-
     try {
-        const cached = await getCache(cacheKey);
-        if (cached) {
-            return res.json({
-                success: true,
-                tests: cached.tests,
-                pagination: cached.pagination,
-                source: "cache",
-            });
-        }
-
         const [tests, total] = await Promise.all([
             prisma.ctest.findMany({
                 where: {
@@ -2109,18 +2101,10 @@ export async function GetCourseTests(req: Request, res: Response) {
             hasNext: offset + LIMIT < total,
         };
 
-        const payload = {
-            tests: formattedTests,
-            pagination,
-        };
-
-        await setCache(cacheKey, payload, 900); // 15 min
-
         return res.json({
             success: true,
             tests: formattedTests,
             pagination,
-            source: "db",
         });
     } catch (error) {
         console.error("GetCourseTests error:", error);
@@ -2144,8 +2128,6 @@ export async function GetCourseTestQuestions(
         });
     }
 
-    const cacheKey = `courseTest:questions:${courseTestId}`;
-
     try {
         const attempted = await prisma.ctestSubmission.findFirst({
             where: {
@@ -2160,15 +2142,6 @@ export async function GetCourseTestQuestions(
             return res.status(403).json({
                 success: false,
                 error: "Course test already submitted",
-            });
-        }
-
-        const cached = await getCache(cacheKey);
-        if (cached) {
-            return res.json({
-                success: true,
-                data: cached,
-                source: "cache",
             });
         }
 
@@ -2256,12 +2229,9 @@ export async function GetCourseTestQuestions(
             imageQuestions,
         };
 
-        await setCache(cacheKey, payload, 900); // 15 min
-
         return res.json({
             success: true,
             data: payload,
-            source: "db",
         });
     } catch (error) {
         console.error("GetCourseTestQuestions error:", error);

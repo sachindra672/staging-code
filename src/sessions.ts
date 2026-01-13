@@ -26,6 +26,8 @@ export async function InsertNewSession(req: Request, res: Response) {
         const nsession = await prisma.session.create({ data: { mentorId, startTime, endTime, bigCourseId, detail, subjectId, description } })
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
+        await invalidateCache(`bigCourses:lessons:${bigCourseId}:*`);
+        await invalidateCache(`bigCourses:todaySessions:${bigCourseId}:*`);
 
         res.json({ success: true, nsession })
     } catch (error) {
@@ -46,6 +48,10 @@ export async function EditSession(req: Request, res: Response) {
         })
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
+        await invalidateCache(`bigCourses:todaySessions:*`);
+        if (bigCourseId) {
+            await invalidateCache(`bigCourses:lessons:${bigCourseId}:*`);
+        }
         res.json({ success: true, nsession })
     } catch (error) {
         console.log(error)
@@ -108,6 +114,11 @@ export async function EditSession2(req: Request, res: Response) {
 
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
+        await invalidateCache(`bigCourses:todaySessions:*`);
+        if (bigCourseId) {
+            await invalidateCache(`bigCourses:lessons:${bigCourseId}:*`);
+            await invalidateCache(`bigCourses:todaySessions:*`);
+        }
         res.json({ success: true, nsession });
 
     } catch (error) {
@@ -143,12 +154,17 @@ export async function InsertNewSessionStream(req: Request, res: Response) {
     const { sessionId, mentorId } = req.body
 
     try {
+        const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { bigCourseId: true } });
         const Token = generateToken04(appId, mentorId, serverSecret, effectiveTimeOut)
         const roomId = randomUUID()
         const nsession = await prisma.sessionStreamInfo.create({ data: { sessionId, Token, roomId, vmIp: 'sisyaclass.xyz' } })
         const updatedSession = await prisma.session.update({ where: { id: sessionId }, data: { isGoingOn: true, roomId, tokenId: Token, vmIp: 'sisyaclass.xyz' } })
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
+        if (session?.bigCourseId) {
+            await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+            await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+        }
         res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
     } catch (error) {
         console.log(error)
@@ -166,7 +182,7 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
 
         const session = await prisma.session.findUnique({
             where: { id: sessionId },
-            select: { vmIp: true }
+            select: { vmIp: true, bigCourseId: true }
         });
         if (!session.vmIp) {
             console.log("no vm ip, creating vm");
@@ -179,6 +195,10 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
             const updatedSession = await prisma.session.update({ where: { id: sessionId }, data: { isGoingOn: true, roomId, tokenId: Token, vmIp: socket_url } })
             await invalidateCache('bigCourses:upcomingSessions:*');
             await invalidateCache('bigCourses:completedSessions:*');
+            if (session?.bigCourseId) {
+                await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+                await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+            }
             res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
         } else {
 
@@ -189,6 +209,10 @@ export async function InsertNewSessionStream2(req: Request, res: Response) {
             console.log("vm exists, url is ", session.vmIp);
             await invalidateCache('bigCourses:upcomingSessions:*');
             await invalidateCache('bigCourses:completedSessions:*');
+            if (session?.bigCourseId) {
+                await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+                await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+            }
             res.json({ success: true, streamInfo: { ...nsession, Token, updatedSession } })
         }
     } catch (error) {
@@ -226,9 +250,15 @@ export async function recordingUploadedWebhook(req: Request, res: Response) {
         });
 
         console.log("Recording URL saved:", sessionId);
+        const session = await prisma.session.findUnique({ where: { id: +sessionId }, select: { bigCourseId: true } });
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
         await invalidateCache('bigCourses:recordings:*');
+        await invalidateCache('bigCourses:recordings:search:*');
+        if (session?.bigCourseId) {
+            await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+            await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+        }
 
         return res.json({ success: true });
     } catch (error: any) {
@@ -464,8 +494,13 @@ export const deleteSession = async (req: Request, res: Response) => {
             });
         });
 
+        const session = await prisma.session.findUnique({ where: { id }, select: { bigCourseId: true } }).catch(() => null);
         await invalidateCache('bigCourses:upcomingSessions:*');
         await invalidateCache('bigCourses:completedSessions:*');
+        if (session?.bigCourseId) {
+            await invalidateCache(`bigCourses:lessons:${session.bigCourseId}:*`);
+            await invalidateCache(`bigCourses:todaySessions:${session.bigCourseId}:*`);
+        }
         return res.status(200).json({ message: "Session deleted successfully" });
     } catch (error: any) {
         console.error("Error deleting session:", error);

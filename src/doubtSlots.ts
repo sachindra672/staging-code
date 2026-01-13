@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "./misc";
 
+function utcMinutes(date: Date) {
+    return date.getUTCHours() * 60 + date.getUTCMinutes()
+}
+
 /**
  * Create a new doubt slot for a mentor
  * POST /teacher/create_doubt_slot
@@ -187,6 +191,127 @@ export async function getAvailableDoubtSlots(req: Request, res: Response) {
         })
     }
 }
+
+export async function getAvailableDoubtSlots2(req: Request, res: Response) {
+    const { mentorId } = req.body
+
+    if (!mentorId) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing mentorId'
+        })
+    }
+
+    try {
+        // ---------- IST helpers ----------
+        const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+        const IST_OFFSET_MIN = 5.5 * 60
+
+        const dayNames = [
+            'SUNDAY',
+            'MONDAY',
+            'TUESDAY',
+            'WEDNESDAY',
+            'THURSDAY',
+            'FRIDAY',
+            'SATURDAY'
+        ]
+
+        function istDayIndex(date: Date) {
+            return new Date(date.getTime() + IST_OFFSET_MS).getDay()
+        }
+
+        function istMinutes(date: Date) {
+            const utcMinutes =
+                date.getUTCHours() * 60 + date.getUTCMinutes()
+            return (utcMinutes + IST_OFFSET_MIN + 1440) % 1440
+        }
+
+        // ---------- Determine TODAY in IST ----------
+        const now = new Date()
+        const todayIndexIST = istDayIndex(now)
+        const todayDayName = dayNames[todayIndexIST]
+        const nowMinutesIST = istMinutes(now)
+
+        // ---------- Fetch ONLY today's slots ----------
+        const slots = await prisma.doubtSlot.findMany({
+            where: {
+                mentorId,
+                dayOfWeek: {
+                    in: [
+                        todayDayName,
+                        todayDayName.toLowerCase(),
+                        todayDayName[0] + todayDayName.slice(1).toLowerCase()
+                    ]
+                },
+                isActive: true
+            },
+            include: {
+                bookedDoubts: true
+            },
+            orderBy: {
+                startTime: 'asc'
+            }
+        })
+
+        // ---------- Status calculation ----------
+        const enhancedSlots = slots.map(slot => {
+            const slotEnd = new Date(slot.endTime)
+            const slotEndMinutesIST = istMinutes(slotEnd)
+
+            let slotStatus: 'passed' | 'booked' | 'available' = 'available'
+
+            // 🔑 SAME DAY (IST) — compare time only
+            if (slotEndMinutesIST <= nowMinutesIST) {
+                slotStatus = 'passed'
+            } else if (
+                slot.currentBookings >= (slot.maxCapacity || 1) ||
+                slot.isAvailable === false
+            ) {
+                slotStatus = 'booked'
+            }
+
+            return {
+                ...slot,
+                slotStatus,
+                bookingsCount: slot.currentBookings,
+                statusIdentifier: slotStatus
+            }
+        })
+
+        const totalAvailable = enhancedSlots.filter(
+            s => s.slotStatus === 'available'
+        ).length
+
+        const totalBooked = enhancedSlots.filter(
+            s => s.slotStatus === 'booked'
+        ).length
+
+        const totalPassed = enhancedSlots.filter(
+            s => s.slotStatus === 'passed'
+        ).length
+
+        return res.status(200).json({
+            success: true,
+            data: enhancedSlots,
+            totals: {
+                totalAvailable,
+                totalBooked,
+                totalPassed
+            }
+        })
+    } catch (error) {
+        console.error('Error in getAvailableDoubtSlots2:', error)
+
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        })
+    }
+}
+
+
 
 /**
  * Update a doubt slot
