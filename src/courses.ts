@@ -53,6 +53,7 @@ export async function InsertCourse(req: Request, res: Response) {
         const imagePath = path.join(imageDir, `${course.id}.jpg`);
 
         fs.mkdirSync(imageDir, { recursive: true });
+        //@ts-ignore
         fs.writeFileSync(imagePath, imageBuffer);
 
         res.json({ succes: true, course });
@@ -158,5 +159,402 @@ export async function GetTeacherCourses(req: Request, res: Response) {
         res.json(course)
     } catch (error) {
         res.json({ success: false, cause: error })
+    }
+}
+
+export const getMentorCourses = async (req: Request, res: Response) => {
+    try {
+        const { mentorId, page = 1, limit = 10 } = req.body;
+
+        // validation
+        if (!mentorId || isNaN(Number(mentorId))) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid mentorId is required"
+            });
+        }
+
+        const mentorIdNum = Number(mentorId);
+
+        // pagination safety
+        const safeLimit = Math.min(Number(limit), 50);
+        const safePage = Math.max(Number(page), 1);
+
+        const skip = (safePage - 1) * safeLimit;
+
+        const [courses, total] = await Promise.all([
+
+            prisma.bigCourse.findMany({
+                where: {
+                    mentorList: {
+                        has: mentorIdNum
+                    },
+                    isActive: true
+                },
+
+                select: {
+                    id: true,
+                    name: true,
+                    isLongTerm:true,
+                    isFree: true,
+                    startDate: true,
+                    endDate: true
+                },
+
+                orderBy: {
+                    createdOn: "desc"
+                },
+
+                skip,
+                take: safeLimit
+            }),
+
+            prisma.bigCourse.count({
+                where: {
+                    mentorList: {
+                        has: mentorIdNum
+                    },
+                    isActive: true
+                }
+            })
+
+        ]);
+
+        // response
+        return res.status(200).json({
+            success: true,
+            page: safePage,
+            limit: safeLimit,
+            totalRecords: total,
+            totalPages: Math.ceil(total / safeLimit),
+            data: courses
+        });
+
+    } catch (error) {
+
+        console.error("Get Mentor Courses Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+// export const getMentorCoursesWithSessions = async (req: Request, res: Response) => {
+//     try {
+
+//         const { mentorId } = req.body;
+
+//         // Validation
+//         if (!mentorId || isNaN(Number(mentorId))) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Valid mentorId is required"
+//             });
+//         }
+
+//         const mentorIdNum = Number(mentorId);
+
+//         const courses = await prisma.bigCourse.findMany({
+
+//             where: {
+//                 mentorList: {
+//                     has: mentorIdNum
+//                 },
+//                 isActive: true
+//             },
+
+//             select: {
+//                 id: true,
+//                 name: true,
+//                 isLongTerm: true,
+//                 isFree: true,
+//                 startDate: true,
+//                 endDate: true,
+
+//                 _count: {
+//                     select: {
+//                         mgSubsciption: true
+//                     }
+//                 },
+
+//                 session: {
+//                     where: {
+//                         mentorId: mentorIdNum
+//                     },
+
+//                     select: {
+//                         id: true,
+//                         startTime: true,
+//                         endTime: true,
+//                         isDone: true,
+//                         isGoingOn: true,
+
+//                         subject: {
+//                             select: {
+//                                 id: true,
+//                                 name: true
+//                             }
+//                         },
+
+//                         _count: {
+//                             select: {
+//                                 SessionTest: true
+//                             }
+//                         }
+//                     },
+
+//                     orderBy: {
+//                         startTime: "desc"
+//                     }
+//                 }
+//             },
+
+//             orderBy: {
+//                 createdOn: "desc"
+//             }
+//         });
+
+//         // Format response
+//         const formattedData = courses.map(course => ({
+//             id: course.id,
+//             name: course.name,
+//             isLongTerm: course.isLongTerm,
+//             isFree: course.isFree,
+//             startDate: course.startDate,
+//             endDate: course.endDate,
+
+//             enrolledStudents: course._count.mgSubsciption,
+
+//             session: course.session.map(s => ({
+//                 id: s.id,
+//                 startTime: s.startTime,
+//                 endTime: s.endTime,
+//                 isDone: s.isDone,
+//                 isGoingOn: s.isGoingOn,
+
+//                 subject: s.subject,
+
+//                 homeworkUpload: s._count.SessionTest > 0
+//             }))
+//         }));
+
+//         return res.status(200).json({
+//             success: true,
+//             totalCourses: formattedData.length,
+//             data: formattedData
+//         });
+
+//     } catch (error) {
+
+//         console.error("Get Mentor Courses With Sessions Error:", error);
+
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error"
+//         });
+//     }
+// };
+
+export const getMentorCoursesWithSessions = async (req: Request, res: Response) => {
+    try {
+
+        const { mentorId } = req.body;
+
+        // Validation
+        if (!mentorId || isNaN(Number(mentorId))) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid mentorId is required"
+            });
+        }
+
+        const mentorIdNum = Number(mentorId);
+
+        const courses = await prisma.bigCourse.findMany({
+
+            where: {
+                mentorList: {
+                    has: mentorIdNum
+                },
+                isActive: true
+            },
+
+            select: {
+                id: true,
+                name: true,
+                isLongTerm: true,
+                isFree: true,
+                startDate: true,
+                endDate: true,
+                grade:true,
+                subjectList:true,
+
+                _count: {
+                    select: {
+                        mgSubsciption: true
+                    }
+                },
+
+                session: {
+                    where: {
+                        mentorId: mentorIdNum
+                    },
+
+                    select: {
+                        id: true,
+                        detail:true,
+                        startTime: true,
+                        endTime: true,
+                        isDone: true,
+                        isGoingOn: true,
+                        vmIp:true,
+                        subject: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        },
+
+                        // Fetch homework ID (minimal)
+                       SessionTest: {
+            select: {
+                id: true,
+                startTime: true,
+                endTime: true,
+                duration: true,
+                modifiedOn: true,
+                createdOn: true,
+                sessionId: true,
+                mentorId: true,
+
+                sessionTestQuestion: {
+                    select: {
+                        id: true,
+                        type: true,
+                        question: true,
+                        option1: true,
+                        option2: true,
+                        option3: true,
+                        option4: true,
+                        correctResponse: true,
+                        sessionTestId: true,
+                        modifiedOn: true,
+                        createdOn: true
+                    }
+                }
+            }
+        },
+
+                        _count: {
+                            select: {
+                                SessionTest: true
+                            }
+                        }
+                    },
+
+                    orderBy: {
+                        startTime: "desc"
+                    }
+                }
+            },
+
+            orderBy: {
+                createdOn: "desc"
+            }
+        });
+
+        // Format response
+        const formattedData = courses.map(course => ({
+            id: course.id,
+            name: course.name,
+            isLongTerm: course.isLongTerm,
+            isFree: course.isFree,
+            startDate: course.startDate,
+            endDate: course.endDate,
+            grade:course.grade,
+            subjects:course.subjectList,
+
+            enrolledStudents: course._count.mgSubsciption,
+
+            session: course.session.map(s => {
+
+                const hasHomework = s._count.SessionTest > 0;
+
+                return {
+                    id: s.id,
+                    name:s.detail,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
+                    isDone: s.isDone,
+                    isGoingOn: s.isGoingOn,
+                    vmIp: s.vmIp,
+                    subject: s.subject,
+                    
+                    homeworkUpload: hasHomework,
+                    sessionTest : hasHomework? s.SessionTest:null,
+                    // Send only if exists
+                    sessionTestId: hasHomework ? s.SessionTest[0]?.id : null,
+                    
+                };
+            })
+        }));
+
+        return res.status(200).json({
+            success: true,
+            totalCourses: formattedData.length,
+            data: formattedData
+        });
+
+    } catch (error) {
+
+        console.error("Get Mentor Courses With Sessions Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+export async function GetBigCoursesByGrade(req: Request, res: Response) {
+    const { grade } = req.body;
+
+    try {
+        if (!grade) {
+            return res.status(400).json({
+                success: false,
+                error: "grade is missing",
+            });
+        }
+
+        const courses = await prisma.bigCourse.findMany({
+            where: {
+                grade,
+                isActive: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                isLongTerm: true,
+                isFree: true,
+            },
+            orderBy: {
+                startDate: "desc",
+            },
+        });
+
+        return res.status(200).json({
+            success: true,
+            courses,
+        });
+    } catch (error) {
+        console.error("GetBigCoursesByGrade Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal Server Error",
+        });
     }
 }

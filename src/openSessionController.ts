@@ -85,6 +85,48 @@ export const getOpenSessions = async (req: Request, res: Response) => {
     }
 };
 
+export const getOpenSessionsByMentor = async (req: Request, res: Response) => {
+    try {
+        const { grade, mentorId } = req.body;
+
+        // Validation
+        if (grade && typeof grade !== "string") {
+            return res.status(400).json({ error: "Grade must be a string" });
+        }
+
+        if (!mentorId || isNaN(Number(mentorId))) {
+            return res.status(400).json({ error: "Valid mentorId is required" });
+        }
+
+        const where: any = {
+            mentorId: Number(mentorId), // mentor filter
+        };
+
+        if (grade) {
+            where.grade = grade;
+        }
+
+        const sessions = await prisma.openSession.findMany({
+            where,
+            include: {
+                mentor: true,
+                bookings: true,
+                attendance: true,
+                quizzes: true,
+                feedbacks: true,
+            },
+            orderBy: { startTime: "desc" },
+        });
+
+        return res.status(200).json(sessions);
+
+    } catch (err) {
+        console.error("Error fetching mentor open sessions:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+
 export const getOpenSessionById = async (req: Request, res: Response) => {
     try {
         const { id } = req.body;

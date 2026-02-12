@@ -175,6 +175,21 @@ export async function updateMentorDeviceId(req: Request, res: Response) {
     }
 }
 
+export async function updateMentorMobileDeviceId(req: Request, res: Response) {
+    const { id, notificationToken } = req.body;
+
+    if (!id) return res.status(400).json({ success: false, message: 'Phone and password are required' });
+
+    try {
+        await prisma.mentor.update({ where: { id }, data: { mobileDeviceId: notificationToken } });
+
+        res.status(200).json({ success: true, message: 'updated the teacher device Id' });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
 export async function SubAdminLogin(req: Request, res: Response) {
     const { email, password } = req.body;
 
@@ -212,6 +227,7 @@ export async function SubAdminLogin(req: Request, res: Response) {
                 email: subAdmin.email,
                 role: subAdmin.role,
                 permissions: subAdmin.permissions,
+                analyticsPermissions: subAdmin.analyticsPermissions
             },
         });
     } catch (error) {
@@ -250,7 +266,7 @@ export async function verifyOtpLoginUser(req: Request, res: Response) {
 
         const phoneFirst4 = phone.toString().substring(0, 4);
 
-        const allowedPhoneNumbers = ["9410127088", "9871158354", "9818814909", "9871684877", "8929904104", "8690638769", "7975801504", "8469776966","9966991947"];
+        const allowedPhoneNumbers = ["9410127088", "9871158354", "9818814909", "9871684877", "8929904104", "8690638769", "7975801504", "8469776966", "9966991947", "9900839942", "7086126887", "8130126081", "8971528085","9099848452","7093346692","9640181578","7499613440","9631815308","8547528701","8197239129","7021733953"];
 
         const isPhoneAllowed = allowedPhoneNumbers.includes(phone.toString());
 
@@ -665,6 +681,47 @@ export async function getMyPurchases2(req: Request, res: Response) {
             success: false,
             error: 'Internal server error',
             details: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+}
+
+export async function markUserAsSisyaEmp(req: Request, res: Response) {
+    const { userId } = req.body;
+
+    try {
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: "userId is required",
+            });
+        }
+
+        const updatedUser = await prisma.endUsers.update({
+            where: {
+                id: Number(userId),
+            },
+            data: {
+                isSisyaEmp: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                isSisyaEmp: true,
+            },
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "User marked as Sisya employee successfully",
+            user: updatedUser,
+        });
+    } catch (error) {
+        console.error("markUserAsSisyaEmp error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal Server Error",
         });
     }
 }

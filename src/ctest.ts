@@ -2241,3 +2241,61 @@ export async function GetCourseTestQuestions(
         });
     }
 }
+
+export async function getCourseTestList(req: Request, res: Response) {
+    const { courseId } = req.body;
+
+    // Validation
+    if (!courseId || isNaN(Number(courseId))) {
+        return res.status(400).json({
+            success: false,
+            error: "Valid courseId is required"
+        });
+    }
+
+    try {
+
+        const tests = await prisma.ctest.findMany({
+
+            where: {
+                bigCourseId: Number(courseId)
+            },
+
+            select: {
+                id: true,
+                title: true,
+                startDate: true,
+                endDate: true,
+                mode: true,
+                totalMarks: true,
+
+                subject: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
+
+            orderBy: {
+                startDate: "desc"
+            }
+
+        });
+
+        return res.status(200).json({
+            success: true,
+            totalTests: tests.length,
+            data: tests
+        });
+
+    } catch (error) {
+
+        console.error("getCourseTestList error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error"
+        });
+    }
+}

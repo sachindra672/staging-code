@@ -561,6 +561,41 @@ export async function updateDoubtResponse(req: Request, res: Response) {
     }
 }
 
+// export async function getMyDoubts(req: Request, res: Response) {
+//     const { userId } = req.body;
+
+//     if (!userId) {
+//         return res.status(400).json({ success: false, error: 'Missing userId' });
+//     }
+
+//     try {
+//         const doubts = await prisma.doubt.findMany({
+//             where: { userId },
+//             include: {
+//                 doubtResponse: true,
+//                 slotBooking: {
+//                     include: {
+//                         slot: true,
+//                         mentor: true
+//                     }
+//                 }
+//             }
+//         });
+//         res.status(200).json({ success: true, doubts });
+//     } catch (error) {
+//         console.error('Error in getMyDoubts:', error);
+//         if (error instanceof Error) {
+//             if (error.name === 'PrismaClientKnownRequestError') {
+//                 res.status(400).json({ success: false, error: 'Database error', message: error.message });
+//             } else {
+//                 res.status(500).json({ success: false, error: 'Internal server error', message: error.message });
+//             }
+//         } else {
+//             res.status(500).json({ success: false, error: 'An unexpected error occurred' });
+//         }
+//     }
+// }
+
 export async function getMyDoubts(req: Request, res: Response) {
     const { userId } = req.body;
 
@@ -573,6 +608,7 @@ export async function getMyDoubts(req: Request, res: Response) {
             where: { userId },
             include: {
                 doubtResponse: true,
+                doubtReview: true, 
                 slotBooking: {
                     include: {
                         slot: true,
@@ -581,20 +617,35 @@ export async function getMyDoubts(req: Request, res: Response) {
                 }
             }
         });
-        res.status(200).json({ success: true, doubts });
+
+        const formattedDoubts = doubts.map(doubt => ({
+            ...doubt,
+            isReviewed: doubt.doubtReview.length > 0
+        }));
+
+        res.status(200).json({
+            success: true,
+            doubts: formattedDoubts
+        });
+
     } catch (error) {
         console.error('Error in getMyDoubts:', error);
+
         if (error instanceof Error) {
-            if (error.name === 'PrismaClientKnownRequestError') {
-                res.status(400).json({ success: false, error: 'Database error', message: error.message });
-            } else {
-                res.status(500).json({ success: false, error: 'Internal server error', message: error.message });
-            }
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+                message: error.message
+            });
         } else {
-            res.status(500).json({ success: false, error: 'An unexpected error occurred' });
+            res.status(500).json({
+                success: false,
+                error: 'An unexpected error occurred'
+            });
         }
     }
 }
+
 
 export async function getDoubtFiles(req: Request, res: Response) {
     const { doubtId } = req.body;
@@ -1296,4 +1347,348 @@ export async function getAllDoubtPackagePurchasesAdmin(
         });
     }
 }
+
+export async function createOrUpdateDoubtLead(req: Request, res: Response) {
+    try {
+        const {
+            name,
+            studentClass,
+            email,
+            phone,
+            doubtPackageId,
+            amount,
+            source,
+            status
+        } = req.body;
+
+        if (!phone) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number is required"
+            });
+        }
+
+        // Check existing lead (simple dedup)
+        const existingLead = await prisma.doubtLead.findFirst({
+            where: {
+                phone,
+                doubtPackageId
+            }
+        });
+
+        if (existingLead) {
+            const updatedLead = await prisma.doubtLead.update({
+                where: { id: existingLead.id },
+                data: {
+                    name,
+                    class: studentClass,
+                    email,
+                    amount,
+                    source,
+                    status: status || "INITIATED",
+                    times: { increment: 1 }
+                }
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Lead updated",
+                data: updatedLead
+            });
+        }
+
+        // Create new lead
+        const newLead = await prisma.doubtLead.create({
+            data: {
+                name,
+                class: studentClass,
+                email,
+                phone,
+                doubtPackageId,
+                amount,
+                source,
+                status: status || "INITIATED",
+                times: 1
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "Lead created",
+            data: newLead
+        });
+
+    } catch (error) {
+        console.error("createOrUpdateDoubtLead error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+export async function updateDoubtLeadStatus(req: Request, res: Response) {
+    try {
+        const { leadId, status, failureReason } = req.body;
+
+        if (!leadId || !status) {
+            return res.status(400).json({
+                success: false,
+                message: "leadId and status are required"
+            });
+        }
+
+        const updatedLead = await prisma.doubtLead.update({
+            where: { id: leadId },
+            data: {
+                status,
+                failureReason
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Lead status updated",
+            data: updatedLead
+        });
+
+    } catch (error) {
+        console.error("updateDoubtLeadStatus error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+
+export async function getAllDoubtLeads(_req: Request, res: Response) {
+    try {
+        const leads = await prisma.doubtLead.findMany({
+            orderBy: [
+                { updatedAt: "desc" },
+                { createdAt: "desc" }
+            ]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: leads
+        });
+    } catch (error) {
+        console.error("getAllDoubtLeads error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+export const createDoubtReview = async (req: Request, res: Response) => {
+    try {
+        const { doubtId, rating, comment,userId } = req.body;
+
+        const doubt = await prisma.doubt.findUnique({
+            where: { id: Number(doubtId) }
+        });
+
+        if (!doubt || !doubt.mentorId) {
+            return res.status(400).json({
+                success: false,
+                message: "Doubt not assigned to mentor"
+            });
+        }
+
+        if (doubt.userId !== userId) {
+            return res.status(403).json({ success: false });
+        }
+
+        if (doubt.status !== 2) {
+            return res.status(400).json({
+                message: "Resolve doubt before review"
+            });
+        }
+
+        const review = await prisma.doubtReview.create({
+            data: {
+                rating,
+                comment,
+                doubtId: doubt.id,
+                userId,
+                mentorId: doubt.mentorId   
+            }
+        });
+
+        res.json({ success: true, data: review });
+
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+};
+
+
+export const getDoubtReviews = async (req: Request, res: Response) => {
+    try {
+        const { doubtId } = req.body;
+
+        if (!doubtId) {
+            return res.status(400).json({
+                success: false,
+                message: "doubtId is required"
+            });
+        }
+
+        const reviews = await prisma.doubtReview.findMany({
+            where: {
+                doubtId: Number(doubtId)
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
+                mentor: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
+            orderBy: {
+                createdOn: "desc"
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            count: reviews.length,
+            data: reviews
+        });
+
+    } catch (error) {
+        console.error("getDoubtReviews error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+
+export const getAllDoubtReviews = async (req: Request, res: Response) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 20;
+
+        const skip = (page - 1) * limit;
+
+        const [reviews, total] = await Promise.all([
+            prisma.doubtReview.findMany({
+                skip,
+                take: limit,
+                orderBy: {
+                    createdOn: "desc"
+                },
+                include: {
+                    user: {
+                        select: { id: true, name: true }
+                    },
+                    mentor: {
+                        select: { id: true, name: true }
+                    },
+                    doubt: {
+                        select: { id: true, subject: true, topic: true }
+                    }
+                }
+            }),
+
+            prisma.doubtReview.count()
+        ]);
+
+        res.status(200).json({
+            success: true,
+            page,
+            totalPages: Math.ceil(total / limit),
+            totalRecords: total,
+            data: reviews
+        });
+
+    } catch (error) {
+        console.error("getAllDoubtReviews error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+export const getReviewsByMentorId = async (req: Request, res: Response) => {
+    try {
+        const { mentorId } = req.body;
+
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+
+        if (!mentorId) {
+            return res.status(400).json({
+                success: false,
+                message: "mentorId is required"
+            });
+        }
+
+        const skip = (page - 1) * limit;
+
+        const [reviews, total] = await Promise.all([
+
+            prisma.doubtReview.findMany({
+                where: {
+                    mentorId: Number(mentorId)
+                },
+                skip,
+                take: limit,
+                orderBy: {
+                    createdOn: "desc"
+                },
+                include: {
+                    user: {
+                        select: { id: true, name: true }
+                    },
+                    doubt: {
+                        select: { id: true, subject: true }
+                    }
+                }
+            }),
+
+            prisma.doubtReview.count({
+                where: {
+                    mentorId: Number(mentorId)
+                }
+            })
+
+        ]);
+
+        res.status(200).json({
+            success: true,
+            mentorId: Number(mentorId),
+            totalReviews: total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            data: reviews
+        });
+
+    } catch (error) {
+        console.error("getReviewsByMentorId error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+
 

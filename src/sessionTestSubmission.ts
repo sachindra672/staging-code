@@ -654,6 +654,114 @@ export async function viewSubmittedSessionTest(
     }
 }
 
+export async function viewSubmittedSessionTestTeacher(
+    req: Request,
+    res: Response
+): Promise<void> {
+    const { sessionTestId, endUsersId } = req.body;
+
+    if (!sessionTestId || !endUsersId) {
+        res.status(400).json({
+            success: false,
+            error: "sessionTestId and endUsersId are required",
+        });
+        return;
+    }
+
+    const testId = Number(sessionTestId);
+    const userId = Number(endUsersId);
+
+    if (isNaN(testId) || isNaN(userId) || testId <= 0 || userId <= 0) {
+        res.status(400).json({
+            success: false,
+            error: "Invalid ids",
+        });
+        return;
+    }
+
+    try {
+        const submission = await prisma.sessionTestSubmission.findFirst({
+            where: {
+                sessionTestId: testId,
+                endUsersId: userId,
+            },
+            include: {
+                sessionTestResponse: true,
+                test: {
+                    include: {
+                        sessionTestQuestion: true,
+                    },
+                },
+            },
+        });
+
+        if (!submission) {
+            res.status(404).json({
+                success: false,
+                error: "Session test not attempted yet",
+            });
+            return;
+        }
+
+        const responseMap = new Map(
+            submission.sessionTestResponse.map((r) => [
+                r.sessionTestQuestionId,
+                r.response,
+            ])
+        );
+
+        let correctCount = 0;
+
+        const questions = submission.test.sessionTestQuestion.map((q) => {
+            const userAnswer = responseMap.get(q.id) ?? null;
+            const isCorrect = userAnswer === q.correctResponse;
+
+            if (isCorrect) correctCount++;
+
+            return {
+                id: q.id,
+                question: q.question,
+                options: {
+                    option1: q.option1,
+                    option2: q.option2,
+                    option3: q.option3,
+                    option4: q.option4,
+                },
+                correctAnswer: q.correctResponse,
+                userAnswer,
+                isCorrect,
+            };
+        });
+
+        const totalQuestions = questions.length;
+
+        const result = {
+            sessionTestId: testId,
+            attemptedAt: submission.createdOn,
+            totalQuestions,
+            correctAnswers: correctCount,
+            score: `${correctCount}/${totalQuestions}`,
+            percentage:
+                totalQuestions > 0
+                    ? Math.round((correctCount / totalQuestions) * 100)
+                    : 0,
+            questions,
+        };
+
+        res.json({
+            success: true,
+            data: result,
+        });
+    } catch (error) {
+        console.error("viewSubmittedSessionTest error:", error);
+        res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
+    }
+}
+
+
 
 export async function GetMySessionTestSubmission(req: Request, res: Response) {
     const { sessionId, endUsersId } = req.body;
@@ -969,5 +1077,247 @@ export async function GetMyBigCourseSessionTestSubmissionsByDate(req: Request, r
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 }
+
+// export async function getAllStudentSessionTestSubmissions(
+//     req: Request,
+//     res: Response
+// ) {
+
+//     const { sessionTestId } = req.body;
+
+//     // ---------- Validation ----------
+
+//     if (!sessionTestId || isNaN(Number(sessionTestId)) || Number(sessionTestId) <= 0) {
+//         return res.status(400).json({
+//             success: false,
+//             error: "Valid sessionTestId is required"
+//         });
+//     }
+
+//     const testId = Number(sessionTestId);
+
+//     try {
+
+//         // ---------- Fetch ALL submissions ----------
+
+//         const submissions = await prisma.sessionTestSubmission.findMany({
+
+//             where: {
+//                 sessionTestId: testId
+//             },
+
+//             include: {
+//                 user: {
+//                     select: {
+//                         id: true,
+//                         name: true,
+//                         email: true
+//                     }
+//                 },
+
+//                 sessionTestResponse: true,
+
+//                 test: {
+//                     include: {
+//                         sessionTestQuestion: true
+//                     }
+//                 }
+//             },
+
+//             orderBy: {
+//                 createdOn: "desc"
+//             }
+//         });
+
+//         if (!submissions.length) {
+//             return res.status(404).json({
+//                 success: false,
+//                 error: "No submissions found"
+//             });
+//         }
+
+//         // ---------- Process Each Student ----------
+
+//         const result = submissions.map(submission => {
+
+//             const responseMap = new Map(
+//                 submission.sessionTestResponse.map(r => [
+//                     r.sessionTestQuestionId,
+//                     r.response
+//                 ])
+//             );
+
+//             let correctCount = 0;
+
+//             const questions = submission.test.sessionTestQuestion.map(q => {
+
+//                 const userAnswer = responseMap.get(q.id) ?? null;
+//                 const isCorrect = userAnswer === q.correctResponse;
+
+//                 if (isCorrect) correctCount++;
+
+//                 return {
+//                     id: q.id,
+//                     question: q.question,
+//                     correctAnswer: q.correctResponse,
+//                     userAnswer,
+//                     isCorrect
+//                 };
+//             });
+
+//             const totalQuestions = questions.length;
+
+//             return {
+//                 student: submission.user,
+//                 attemptedAt: submission.createdOn,
+//                 totalQuestions,
+//                 correctAnswers: correctCount,
+//                 score: `${correctCount}/${totalQuestions}`,
+//                 percentage: totalQuestions
+//                     ? Math.round((correctCount / totalQuestions) * 100)
+//                     : 0,
+//                 questions
+//             };
+//         });
+
+//         return res.status(200).json({
+//             success: true,
+//             sessionTestId: testId,
+//             totalSubmissions: result.length,
+//             data: result
+//         });
+
+//     } catch (error) {
+
+//         console.error("getAllStudentSessionTestSubmissions error:", error);
+
+//         return res.status(500).json({
+//             success: false,
+//             error: "Internal server error"
+//         });
+//     }
+// }
+
+export async function getAllStudentSessionTestSubmissions(
+    req: Request,
+    res: Response
+) {
+    const { sessionTestId } = req.body;
+
+    if (!sessionTestId || isNaN(Number(sessionTestId)) || Number(sessionTestId) <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Valid sessionTestId is required"
+        });
+    }
+
+    const testId = Number(sessionTestId);
+
+    try {
+        const submissions = await prisma.sessionTestSubmission.findMany({
+
+            where: {
+                sessionTestId: testId
+            },
+
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true
+                    }
+                },
+
+                sessionTestResponse: true,
+
+                test: {
+                    include: {
+                        sessionTestQuestion: true
+                    }
+                }
+            },
+
+            orderBy: {
+                createdOn: "desc"
+            }
+        });
+
+        if (!submissions.length) {
+            return res.status(404).json({
+                success: false,
+                error: "No submissions found"
+            });
+        }
+
+        const result = submissions.map(submission => {
+
+            const responseMap = new Map(
+                submission.sessionTestResponse.map(r => [
+                    r.sessionTestQuestionId,
+                    r.response
+                ])
+            );
+
+            let correctCount = 0;
+
+            const questions = submission.test.sessionTestQuestion.map(q => {
+
+                const userAnswer = responseMap.get(q.id) ?? null;
+                const isCorrect = userAnswer === q.correctResponse;
+
+                if (isCorrect) correctCount++;
+
+                return {
+                    id: q.id,
+                    question: q.question,
+
+                    options: {
+                        option1: q.option1,
+                        option2: q.option2,
+                        option3: q.option3,
+                        option4: q.option4
+                    },
+
+                    correctAnswer: q.correctResponse,
+                    userAnswer,
+                    isCorrect
+                };
+            });
+
+            const totalQuestions = questions.length;
+
+            return {
+                student: submission.user,
+                attemptedAt: submission.createdOn,
+                totalQuestions,
+                correctAnswers: correctCount,
+                score: `${correctCount}/${totalQuestions}`,
+                percentage: totalQuestions
+                    ? Math.round((correctCount / totalQuestions) * 100)
+                    : 0,
+                questions
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            sessionTestId: testId,
+            totalSubmissions: result.length,
+            data: result
+        });
+
+    } catch (error) {
+
+        console.error("getAllStudentSessionTestSubmissions error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error"
+        });
+    }
+}
+
+
 
 

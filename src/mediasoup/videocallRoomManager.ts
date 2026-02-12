@@ -2,7 +2,7 @@ import { types } from 'mediasoup';
 
 export type VcPeer = {
     transports: types.WebRtcTransport[],
-    sendTransport?: types.WebRtcTransport,  
+    sendTransport?: types.WebRtcTransport,
     recvTransport?: types.WebRtcTransport,
     producers: types.Producer[],
     consumers: types.Consumer[],
@@ -10,6 +10,8 @@ export type VcPeer = {
     socketId: string,
     name?: string,
     role?: string,
+    micPaused?: boolean,
+    cameraPaused?: boolean,
 };
 
 export type VcRoom = {
@@ -30,8 +32,8 @@ export const addPeerToVideoRoom = (callId: string, peerId: string, socketId: str
     if (!room.peers.has(peerId)) {
         room.peers.set(peerId, {
             transports: [],
-            sendTransport: undefined,  
-            recvTransport: undefined, 
+            sendTransport: undefined,
+            recvTransport: undefined,
             producers: [],
             consumers: [],
             name,
@@ -62,14 +64,14 @@ export const removePeerFromVideoRoom = (callId: string, peerId: string) => {
 export const deleteVideoRoom = (callId: string) => {
     const room = videoRooms.get(callId);
     if (!room) return;
-    
+
     // Close all remaining resources
     room.peers.forEach(peer => {
-        peer.producers.forEach(p => { try { p.close(); } catch {} });
-        peer.consumers.forEach(c => { try { c.close(); } catch {} });
-        peer.transports.forEach(t => { try { t.close(); } catch {} });
+        peer.producers.forEach(p => { try { p.close(); } catch { } });
+        peer.consumers.forEach(c => { try { c.close(); } catch { } });
+        peer.transports.forEach(t => { try { t.close(); } catch { } });
     });
-    
+
     videoRooms.delete(callId);
     console.log(`✅ Video room deleted: ${callId}`);
 };

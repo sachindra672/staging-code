@@ -18,6 +18,8 @@ model endUsers {
   grade                     String?
   password                  String?                     @db.VarChar(255)
   isVerified                Boolean?                    @default(false)
+  isSisyaEmp                Boolean?                    @default(false)
+  isBanned                  Boolean                     @default(false)
   createdOn                 DateTime?                   @default(now())
   modefiedOn                DateTime?                   @default(now())
   image                     String?
@@ -68,29 +70,34 @@ model endUsers {
   sisyaClassQuizResponses   sisyaClassQuizResponse[]
   recordingWatchProgress    RecordingWatchProgress[]
   slotBookings              doubtSlotBooking[]          @relation("studentSlotBookings")
+  doubtReviews              doubtReview[]
+  announcements             Announcement[]
+  announcementReads         AnnouncementRead[]
+  banRecords                BanRecord[]                 @relation("UserBans")
 }
 
 model mentor {
-  id                      Int                       @id @default(autoincrement())
-  uuid                    String                    @default(uuid())
-  name                    String                    @db.VarChar(255)
-  email                   String                    @db.VarChar(255)
-  address                 String                    @db.VarChar(255)
-  searchTags              String                    @db.VarChar(255)
-  languages               String                    @db.VarChar(255)
-  passHash                String                    @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
-  about                   String                    @default("this is some random about value to prevent null error ")
-  Grades                  String[]                  @default(["1", "2", "3", "4", "5", "6"])
-  studentCount            BigInt
-  doubtsSolved            BigInt
-  averageRating           Float
-  dateOfBirth             DateTime
-  isActive                Boolean                   @default(true)
-  createdOn               DateTime                  @default(now())
-  modefiedOn              DateTime                  @default(now())
-  phone                   String                    @db.VarChar(13)
-  subjectId               Int?
-  deviceId                String                    @default("")
+  id             Int      @id @default(autoincrement())
+  uuid           String   @default(uuid())
+  name           String   @db.VarChar(255)
+  email          String   @db.VarChar(255)
+  address        String   @db.VarChar(255)
+  searchTags     String   @db.VarChar(255)
+  languages      String   @db.VarChar(255)
+  passHash       String   @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  about          String   @default("this is some random about value to prevent null error ")
+  Grades         String[] @default(["1", "2", "3", "4", "5", "6"])
+  studentCount   BigInt
+  doubtsSolved   BigInt
+  averageRating  Float
+  dateOfBirth    DateTime
+  isActive       Boolean  @default(true)
+  createdOn      DateTime @default(now())
+  modefiedOn     DateTime @default(now())
+  phone          String   @db.VarChar(13)
+  subjectId      Int?
+  deviceId       String   @default("")
+  mobileDeviceId String   @default("")
 
   isDoubtSpecialist       Boolean                   @default(false)
   isAvailableForDoubts    Boolean                   @default(true)
@@ -125,6 +132,10 @@ model mentor {
   doubtSlots              doubtSlot[]               @relation("mentorDoubtSlots")
   slotBookings            doubtSlotBooking[]        @relation("mentorSlotBookings")
   slotInstances           doubtSlotInstance[]       @relation("mentorSlotInstances")
+  doubtReviews            doubtReview[]
+  announcements           Announcement[]
+  announcementReads       AnnouncementRead[]
+  issuedBans              BanRecord[]               @relation("BannedByMentor")
 }
 
 model testmodelNewMigration {
@@ -300,7 +311,25 @@ model doubt {
   asker          endUsers          @relation(fields: [userId], references: [id])
   doubtResponse  doubtResponse[]
   subjectRecord  subjectRecord[]
+  doubtReview    doubtReview[]
   slotBooking    doubtSlotBooking?
+}
+
+model doubtReview {
+  id        Int      @id @default(autoincrement())
+  rating    Int // 1 to 5
+  comment   String?
+  createdOn DateTime @default(now())
+
+  doubtId  Int
+  userId   Int
+  mentorId Int
+
+  doubt  doubt    @relation(fields: [doubtId], references: [id])
+  user   endUsers @relation(fields: [userId], references: [id])
+  mentor mentor   @relation(fields: [mentorId], references: [id])
+
+  @@unique([doubtId, userId])
 }
 
 model doubtResponse {
@@ -417,6 +446,8 @@ model admin {
   AuditLog             AuditLog[]
   ContentAccessRequest ContentAccessRequest[]
   GroupMember          GroupMember[]
+  issuedBans           BanRecord[]            @relation("BannedByAdmin")
+  resolvedBans         BanRecord[]            @relation("UnbannedByAdmin")
 }
 
 model offer {
@@ -681,14 +712,15 @@ model BigCourse {
   session          session[]
 
   // website related
-  isWebCreated Boolean       @default(false)
-  BigCourseWeb BigCourseWeb?
+  isWebCreated  Boolean        @default(false)
+  BigCourseWeb  BigCourseWeb?
+  announcements Announcement[]
 }
 
 model mgSubsciption {
-  id            Int       @id @default(autoincrement())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id            Int          @id @default(autoincrement())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   PurchasePrice Float
   cgst          Float
   sgst          Float
@@ -697,12 +729,12 @@ model mgSubsciption {
   endUsersId    Int
   bigCourseId   Int
   OrderId       String?
-  isActive      Boolean   @default(true)
-  isPartialPaid Boolean   @default(false)
-  isFullPaid    Boolean   @default(true)
+  isActive      Boolean      @default(true)
+  isPartialPaid Boolean      @default(false)
+  isFullPaid    Boolean      @default(true)
   dueDate       DateTime?
-  course        BigCourse @relation(fields: [bigCourseId], references: [id])
-  user          endUsers  @relation(fields: [endUsersId], references: [id])
+  course        BigCourse    @relation(fields: [bigCourseId], references: [id])
+  user          endUsers     @relation(fields: [endUsersId], references: [id])
   doubtRecord   doubtRecord?
 
   @@unique([endUsersId, bigCourseId])
@@ -1144,20 +1176,20 @@ model assetRecords {
 }
 
 model doubtRecord {
-  id                    Int                     @id @default(autoincrement())
-  doubtsAsked           Int                     @default(0)
-  doubtsRemaining       Int                     @default(5)  // Purchased doubts only
-  endUsersId            Int
+  id                     Int                     @id @default(autoincrement())
+  doubtsAsked            Int                     @default(0)
+  doubtsRemaining        Int                     @default(5) // Purchased doubts only
+  endUsersId             Int
   // Monthly benefit fields
-  linkedSubscriptionId  Int?                    @unique
-  monthlyDoubtAllowance Int                    @default(15)
-  monthlyDoubtsRemaining Int                   @default(0)  // Monthly benefit doubts (separate from purchased)
-  lastMonthlyResetDate  DateTime?
-  enrollmentDate        DateTime?
-  isMonthlyBenefitActive Boolean                @default(false)
-  doubtPackagePurchases doubtPackagePurchases[]
-  user                  endUsers                @relation(fields: [endUsersId], references: [id])
-  linkedSubscription    mgSubsciption?          @relation(fields: [linkedSubscriptionId], references: [id])
+  linkedSubscriptionId   Int?                    @unique
+  monthlyDoubtAllowance  Int                     @default(15)
+  monthlyDoubtsRemaining Int                     @default(0) // Monthly benefit doubts (separate from purchased)
+  lastMonthlyResetDate   DateTime?
+  enrollmentDate         DateTime?
+  isMonthlyBenefitActive Boolean                 @default(false)
+  doubtPackagePurchases  doubtPackagePurchases[]
+  user                   endUsers                @relation(fields: [endUsersId], references: [id])
+  linkedSubscription     mgSubsciption?          @relation(fields: [linkedSubscriptionId], references: [id])
 }
 
 model doubtPackage {
@@ -1189,6 +1221,27 @@ model doubtPackagePurchases {
   record         doubtRecord   @relation(fields: [doubtRecordId], references: [id])
   endUsers       endUsers?     @relation(fields: [endUsersId], references: [id])
   package        doubtPackage? @relation(fields: [doubtPackageId], references: [id])
+}
+
+model doubtLead {
+  id Int @id @default(autoincrement())
+
+  name  String?
+  class String?
+  email String?
+  phone String
+
+  doubtPackageId Int?
+  status         String // INITIATED | SUCCESS | FAILED
+
+  times Int @default(1)
+
+  amount        Decimal? @db.Decimal(10, 2)
+  source        String?
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model groupChatInfo {
@@ -1862,9 +1915,11 @@ model Blog {
   activityReads          Int @default(0)
   activityParentComments Int @default(0)
 
-  draft       Boolean  @default(false)
-  publishedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  draft         Boolean   @default(false)
+  publishStatus String    @default("PUBLISHED")
+  scheduledAt   DateTime?
+  publishedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   comments Comment[]
   tags     BlogTag[]
@@ -1943,13 +1998,14 @@ model News {
 }
 
 model SubAdmin {
-  id          String  @id @default(cuid())
-  name        String
-  email       String  @unique
-  password    String  @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
-  role        String  @default("subadmin")
-  permissions Json    @default("{}")
-  isActive    Boolean @default(true)
+  id                   String  @id @default(cuid())
+  name                 String
+  email                String  @unique
+  password             String  @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  role                 String  @default("subadmin")
+  permissions          Json    @default("{}")
+  analyticsPermissions Json    @default("{}")
+  isActive             Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2509,4 +2565,135 @@ model RecordingWatchSegment {
 
   @@index([watchProgressId])
   @@index([watchedAt])
+}
+
+//Announcment
+enum AnnouncmentType {
+  GENERAL
+  IMPORTANT
+  ALERT
+  REMINDER
+}
+
+enum AnnouncmentStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  CANCELLED
+}
+
+enum AnnouncmentAudience {
+  ALL_USERS
+  STUDENTS
+  TEACHERS
+}
+
+enum AnnouncmentScope {
+  GLOBAL
+  COURSE
+  CLASS
+  INDIVIDUAL
+}
+
+enum AnnouncmentSource {
+  ADMIN
+  TEACHER
+  SYSTEM
+}
+
+model Announcement {
+  id String @id @default(cuid())
+
+  title   String
+  message String
+
+  type   AnnouncmentType   @default(GENERAL)
+  status AnnouncmentStatus @default(DRAFT)
+
+  // target
+  audience AnnouncmentAudience @default(ALL_USERS)
+  scope    AnnouncmentScope    @default(GLOBAL)
+
+  // target references
+  courseId Int?
+  classId  Int?
+  userId   Int?
+  mentorId Int?
+
+  // SCHEDULING
+  scheduledAt DateTime?
+  sentAt      DateTime?
+
+  // DELIVERY CHANNELS
+  sendPush     Boolean @default(true)
+  sendEmail    Boolean @default(false)
+  sendWhatsapp Boolean @default(false)
+  sendSMS      Boolean @default(false)
+  sendInApp    Boolean @default(true)
+
+  // for analytics purpose
+  totalSent Int @default(0)
+  totalRead Int @default(0)
+
+  // Image support
+  imageUrl     String?
+  thumbnailUrl String?
+
+  // navigation
+  actionType   String? // OPEN_PAGE, OPEN_URL, NONE
+  actionTarget String?
+  actionData   Json?
+
+  source    AnnouncmentSource @default(ADMIN)
+  createdBy Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
+
+  user   endUsers?  @relation(fields: [userId], references: [id])
+  course BigCourse? @relation(fields: [courseId], references: [id])
+  mentor mentor?    @relation(fields: [mentorId], references: [id])
+
+  reads AnnouncementRead[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([audience, scope])
+}
+
+model AnnouncementRead {
+  id String @id @default(cuid())
+
+  announcementId String
+  userId         Int?
+  mentorId       Int?
+
+  readAt DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  user   endUsers? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentor mentor?   @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@unique([announcementId, mentorId])
+  @@index([userId])
+  @@index([mentorId])
+}
+
+//ban system
+model BanRecord {
+  id                Int       @id @default(autoincrement())
+  studentId         Int
+  bannedByMentorId  Int?
+  bannedByAdminId   Int?
+  unbannedByAdminId Int?
+  reason            String
+  bannedAt          DateTime  @default(now())
+  unbannedAt        DateTime?
+  student           endUsers  @relation("UserBans", fields: [studentId], references: [id])
+  bannedByMentor    mentor?   @relation("BannedByMentor", fields: [bannedByMentorId], references: [id])
+  bannedByAdmin     admin?    @relation("BannedByAdmin", fields: [bannedByAdminId], references: [id])
+  unbannedByAdmin   admin?    @relation("UnbannedByAdmin", fields: [unbannedByAdminId], references: [id])
 }

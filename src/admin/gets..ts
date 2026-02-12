@@ -119,3 +119,38 @@ export async function GetAllCourses(_req: Request, res: Response) {
         }
     }
 }
+
+export async function GetAllActiveMentors(_req: Request, res: Response) {
+    try {
+        const mentors = await prisma.mentor.findMany({
+            where: {
+                isActive: true,
+            },
+            select: {
+                id: true,
+                uuid: true,
+                name: true,
+                email: true,
+                phone: true,
+            },
+        });
+
+        res.json({ success: true, mentors });
+    } catch (error) {
+        console.error("Error in GetAllMentors:", error);
+
+        if (error instanceof Error) {
+            res.status(500).json({
+                success: false,
+                error: "Internal server error",
+                message: error.message,
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: "An unexpected error occurred",
+            });
+        }
+    }
+}
+

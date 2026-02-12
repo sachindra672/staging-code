@@ -182,7 +182,7 @@ export const videoCallSocketHandler = (io: Server, socket: Socket, workers: Work
         }
     });
 
-    
+
     socket.on('toggle-producer', async ({ roomId, producerId, action }, callback) => {
         try {
             const room = getRoom(roomId);
@@ -197,7 +197,14 @@ export const videoCallSocketHandler = (io: Server, socket: Socket, workers: Work
             else throw new Error('Invalid action');
 
 
-            io.to(roomId).emit('peer-media-status', { peerId: user.info.uuid, producerId, action });
+            io.to(roomId).emit('peer-media-status', {
+                peerId: user.info.uuid,
+                producerId,
+                kind: producer.kind,
+                action,
+                name: user.info.name,
+                role: peer.role
+            });
 
             callback({ success: true });
         } catch (err) {

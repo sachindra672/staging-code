@@ -176,7 +176,7 @@ export async function GetBigCoursesLesson(req: Request, res: Response) {
         return res.status(400).json({ success: false, error: "id missing" });
     }
 
-    const LIMIT = 20;
+    const LIMIT = 500;
     const offset = (Number(page) - 1) * LIMIT;
 
     const cacheKey = `bigCourses:lessons:${id}:page:${page}`;
@@ -1032,5 +1032,187 @@ export async function getMaterialFilesListwithTime(req: Request, res: Response) 
     } catch (error) {
         console.error('Error in getMaterialFilesList:', error);
         res.status(500).json({ success: false, error: 'Internal server error', message: error });
+    }
+}
+
+export async function GetCompletedSessionsAdmin(req: Request, res: Response) {
+    const {
+        id,
+        page = 1,
+        startDate,   
+        endDate,     
+        search = ""  
+    } = req.body;
+
+    if (!id) {
+        return res.status(400).json({
+            success: false,
+            error: "id missing",
+        });
+    }
+
+    const LIMIT = 20;
+    const offset = (Number(page) - 1) * LIMIT;
+
+    try {
+        const whereClause: any = {
+            bigCourseId: id,
+            isDone: true,
+        };
+
+        if (startDate || endDate) {
+            whereClause.startTime = {};
+
+            if (startDate) {
+                whereClause.startTime.gte = new Date(startDate);
+            }
+
+            if (endDate) {
+                whereClause.startTime.lte = new Date(endDate);
+            }
+        }
+
+        if (search.trim()) {
+            whereClause.OR = [
+                {
+                    detail: {
+                        contains: search,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    subject: {
+                        name: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
+                    },
+                },
+                {
+                    mentor: {
+                        name: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
+                    },
+                },
+            ];
+        }
+
+        const [sessions, total] = await Promise.all([
+            prisma.session.findMany({
+                where: whereClause,
+
+                select: {
+                    id: true,
+                    detail: true,
+
+                    // Scheduled
+                    startTime: true,
+                    endTime: true,
+
+                    subject: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+
+                    mentor: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+
+                    // Homework
+                    SessionTest: {
+                        select: {
+                            id: true,
+                        },
+                    },
+
+                    // Actual analytics
+                    analytics: {
+                        select: {
+                            classStartTime: true,
+                            classEndTime: true,
+                            actualDuration: true,
+
+                            teacherAttendance: {
+                                select: {
+                                    teacher: {
+                                        select: {
+                                            id: true,
+                                            name: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+
+                orderBy: {
+                    startTime: "desc",
+                },
+
+                skip: offset,
+                take: LIMIT,
+            }),
+
+            prisma.session.count({
+                where: whereClause,
+            }),
+        ]);
+
+        const formattedSessions = sessions.map((s) => ({
+            id: s.id,
+            detail: s.detail,
+
+            // Scheduled
+            scheduledStartTime: s.startTime,
+            scheduledEndTime: s.endTime,
+            scheduledDuration:
+                (new Date(s.endTime).getTime() -
+                    new Date(s.startTime).getTime()) /
+                (1000 * 60),
+
+            scheduledTeacher: s.mentor,
+
+            subject: s.subject,
+
+            // Homework
+            isHomeworkUploaded: s.SessionTest.length > 0,
+
+            // Actual
+            actualStartTime: s.analytics?.classStartTime || null,
+            actualEndTime: s.analytics?.classEndTime || null,
+            actualDuration: s.analytics?.actualDuration || null,
+
+            actualTeacher:
+                s.analytics?.teacherAttendance?.teacher || null,
+        }));
+
+        const pagination = {
+            page: Number(page),
+            limit: LIMIT,
+            total,
+            hasNext: offset + LIMIT < total,
+        };
+
+        return res.json({
+            success: true,
+            sessions: formattedSessions,
+            pagination,
+        });
+
+    } catch (error) {
+        console.error("GetCompletedSessionsAdmin error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal Server Error",
+        });
     }
 }

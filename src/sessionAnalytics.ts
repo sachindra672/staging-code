@@ -2438,4 +2438,194 @@ export async function getStudentCourseAttendance(req: Request, res: Response) {
     }
 }
 
+export const getSessionStudentAnalyticsWithAbsent = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                error: "sessionId is required",
+            });
+        }
+
+        const analytics = await prisma.sessionAnalytics.findUnique({
+            where: {
+                sessionId: Number(sessionId),
+            },
+            select: {
+                sessionId: true,
+                session: {
+                    select: {
+                        bigCourseId: true,
+                    },
+                },
+                studentIntervals: {
+                    select: {
+                        studentId: true,
+                        joinTime: true,
+                        leaveTime: true,
+                        duration: true,
+                        isEarlyLeave: true,
+                        isLateJoin: true,
+                        student: {
+                            select: {
+                                name: true,
+                                email: true,
+                                phone: true,
+                                isActive: true,
+                                isSisyaEmp: true, 
+                            },
+                        },
+                    },
+                    orderBy: {
+                        joinTime: "asc",
+                    },
+                },
+            },
+        });
+
+        if (!analytics || !analytics.session) {
+            return res.status(404).json({
+                success: false,
+                error: "Analytics or Session not found",
+            });
+        }
+
+        const courseId = analytics.session.bigCourseId;
+
+        const subscriptions = await prisma.mgSubsciption.findMany({
+            where: {
+                bigCourseId: courseId,
+                isActive: true,
+                user: {
+                    isActive: true,
+                    isSisyaEmp: false, 
+                },
+            },
+            select: {
+                endUsersId: true,
+                user: {
+                    select: {
+                        name: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+            },
+        });
+
+        const presentMap = new Map<number, any>();
+
+        for (const st of analytics.studentIntervals) {
+            if (
+                !st.student ||
+                st.student.isActive === false ||
+                st.student.isSisyaEmp === true 
+            ) {
+                continue;
+            }
+
+            let durationMin = 0;
+
+            if (typeof st.duration === "number") {
+                durationMin = Number((st.duration / 60).toFixed(1));
+            } else if (st.leaveTime) {
+                const diff =
+                    new Date(st.leaveTime).getTime() -
+                    new Date(st.joinTime).getTime();
+                durationMin = Number((diff / 1000 / 60).toFixed(1));
+            }
+
+            const existing = presentMap.get(st.studentId);
+
+            if (!existing) {
+                presentMap.set(st.studentId, {
+                    studentId: st.studentId,
+                    name: st.student?.name ?? "-",
+                    email: st.student?.email ?? "-",
+                    phone: st.student?.phone ?? "-",
+
+                    status: "PRESENT",
+
+                    totalDurationMin: durationMin,
+                    isEarlyLeave: !!st.isEarlyLeave,
+                    isLateJoin: !!st.isLateJoin,
+
+                    intervals: [
+                        {
+                            joinTime: st.joinTime,
+                            leaveTime: st.leaveTime,
+                            durationMin,
+                        },
+                    ],
+                });
+            } else {
+                existing.totalDurationMin += durationMin;
+                existing.isEarlyLeave ||= !!st.isEarlyLeave;
+                existing.isLateJoin ||= !!st.isLateJoin;
+
+                existing.intervals.push({
+                    joinTime: st.joinTime,
+                    leaveTime: st.leaveTime,
+                    durationMin,
+                });
+            }
+        }
+
+        const finalStudents: any[] = [];
+
+        for (const sub of subscriptions) {
+            const studentId = sub.endUsersId;
+
+            const presentStudent = presentMap.get(studentId);
+
+            if (presentStudent) {
+                finalStudents.push(presentStudent);
+            } else {
+                finalStudents.push({
+                    studentId,
+                    name: sub.user.name ?? "-",
+                    email: sub.user.email ?? "-",
+                    phone: sub.user.phone ?? "-",
+
+                    status: "ABSENT",
+
+                    totalDurationMin: 0,
+                    isEarlyLeave: false,
+                    isLateJoin: false,
+                    intervals: [],
+                });
+            }
+        }
+
+        const presentCount = finalStudents.filter(
+            (s) => s.status === "PRESENT"
+        ).length;
+
+        const absentCount = finalStudents.filter(
+            (s) => s.status === "ABSENT"
+        ).length;
+
+        return res.status(200).json({
+            success: true,
+            sessionId,
+            totalEnrolled: subscriptions.length,
+            presentCount,
+            absentCount,
+            students: finalStudents,
+        });
+    } catch (error) {
+        console.error("Session Attendance Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal Server Error",
+        });
+    }
+};
+
 

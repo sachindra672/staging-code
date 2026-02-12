@@ -64,7 +64,7 @@ export async function ToggleSubAdminActive(req: Request, res: Response) {
 }
 
 export async function UpdateSubAdmin(req: Request, res: Response) {
-    const { id,name, email, permissions } = req.body;
+    const { id,name, email, permissions ,analyticsPermissions} = req.body;
 
     try {
         const subAdmin = await prisma.subAdmin.findUnique({ where: { id } });
@@ -78,6 +78,7 @@ export async function UpdateSubAdmin(req: Request, res: Response) {
                 name: name ?? subAdmin.name,
                 email: email ?? subAdmin.email,
                 permissions: permissions ?? subAdmin.permissions,
+                analyticsPermissions: analyticsPermissions ?? subAdmin.analyticsPermissions
             },
         });
 

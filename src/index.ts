@@ -5,10 +5,10 @@ import { Request, Response } from "express";
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import * as jwt from 'jsonwebtoken';
 
-import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2, GetUserIdByUuid } from './UserFuncs';
+import { createUser, generateAndSendOtpUser, MentorLogin, verifyOtpLoginUser, updateUser, CompleteUserRegisteration, createUserAdmin, updateUserAdmin, updateUserDeviceId, GetUserById, getMyPurchases2, SoftDeleteUser, findUser, SubAdminLogin, updateMentorDeviceId, updateUser2, GetUserIdByUuid, updateMentorMobileDeviceId, markUserAsSisyaEmp } from './UserFuncs';
 import { authenticateTokenUser, downlinkMessage, getRedisContents, prisma, SECRET, sendMsgx, uploadImage } from './misc';
 import { GetMentorBySubject, GetMentorData, GetMentorsByClasses, GetMyMentors, InsertMentor, updateMentor, updateMentorPassword, updateMentorPassword2, toggleDoubtSpecialist, toggleDoubtAvailability, getDoubtSpecialists, GetDoubtSpecialistBySubject, getDoubtSpecialistsWithEarliestSlot } from './mentor';
-import { GetCoursesByGrade, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
+import { GetBigCoursesByGrade, GetCoursesByGrade, getMentorCourses, getMentorCoursesWithSessions, GetTeacherCourses, InsertCourse, UpdateCourse } from './courses';
 import { GetUsersByBigCourse, GetUsersByBigCourse2, InsertLessons, UpdateLessons } from './lessons';
 import { GetTeacherAssignments, GetUserAssingments, InsertAssignmentWithFiles, InsertSubmission, UpdateAssignment, GetMySubmissions, InsertSubmissionWithFiles } from './assignments';
 import { logMessageServer } from "./consts";
@@ -129,7 +129,13 @@ import {
   updateDoubtPackage,
   deleteDoubtPackage,
   getAllDoubtPackages,
-  getAllDoubtPackagePurchasesAdmin
+  getAllDoubtPackagePurchasesAdmin,
+  createDoubtPackage2,
+  createOrUpdateDoubtLead,
+  updateDoubtLeadStatus,
+  getAllDoubtLeads,
+  createDoubtReview,
+  getReviewsByMentorId
 } from './doubts';
 import {
   createDoubtSlot,
@@ -153,18 +159,18 @@ import { GetAllBoards, GetAllSubjectData, GetSubjectByGrade, GetSubjectById, Ins
 import { GetUserAssignments2 } from './getMyAssignments2';
 import { InsertAndCheckMcqResponses } from './mcqResponse';
 import { GetTestByCourseId } from './mcqTests';
-import { GetBigCourseNewDetails, GetBigCourses, GetBigCourses2, GetBigCourses3, GetBigCoursesById, GetBigCoursesLesson, GetBigCoursesNew, GetCompletedSessions, GetLongTermCoursesPublicList, getMaterialFilesList, getMaterialFilesListwithTime, GetSessionRecordings, GetTodaySessions, GetUpcomingSessions, SearchSessionRecordings } from './bigCourseFuncs/mainCourse';
+import { GetBigCourseNewDetails, GetBigCourses, GetBigCourses2, GetBigCourses3, GetBigCoursesById, GetBigCoursesLesson, GetBigCoursesNew, GetCompletedSessions, GetCompletedSessionsAdmin, GetLongTermCoursesPublicList, getMaterialFilesList, getMaterialFilesListwithTime, GetSessionRecordings, GetTodaySessions, GetUpcomingSessions, SearchSessionRecordings } from './bigCourseFuncs/mainCourse';
 import { getCourseTestResponses, getMyBgCourseSubscriptions, GetSessionTestSubmissions, SubmitCourseTestResponse } from './bigCourseFuncs/sessionTestResponse';
 import { GetMentor, GetMentorCourses, GetMentorRatings, InsertMentorRating } from './mentor2';
 import { deleteSession, EditSession, EditSession2, GetSessionsByBigCourse, getStreamInfo, GetVMIP, InsertNewSession, InsertNewSessionStream, InsertNewSessionStream2, recordingUploadedWebhook } from './sessions';
 import { GetMultipleStudentInfo, GetMyBigCourseStudents, getStudentByGrade } from './getMyStudents';
 import { getStudentAttendanceRecords, getStudentListBySession, insertAttendanceRecord, RecordAttendanceExitTime } from './attendanceRecords';
 import { GetSessionTestQuestions, GetSessionTests, InsertSessionTestQuestions, InsertSessionTests, InsertSessionTests2 } from './sessionTests';
-import { createSessionTestSubmission, createSessionTestSubmission2, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission, submitSessionTestAttempt, viewSubmittedSessionTest } from './sessionTestSubmission';
-import { GetMyAttendanceProgressReport, sessionAttendanceList } from './studentProgressReport';
-import { AddMentor, createBigCourse, updateBigCourse, updateBigCourse2 } from './admin/adds';
-import { GetAllCourses, GetAllMentors, GetPagedStudentList } from './admin/gets.';
-import { createCtest, createCtest2, createCtestSubmission, createCtestSubmission2, createImageCtestSubmission, deleteCTest, editCtest, editCtest2, finalizeImageCtestSubmission, generateCtestAnswerUploadUrl, generateCtestAttachmentUploadUrl, GetAllCtestSubmissionsByCourse, GetCtestSubmissionsByTest, GetCtests, GetMyBigCourseCtestSubmission, GetMyCtestSubmission, markImageAnswer, GetCtestSubmissionsByTest2, GetCourseTests, GetCourseTestQuestions, submitMcqCtest, submitImageCtest, viewSubmittedCtest } from './ctest';
+import { createSessionTestSubmission, createSessionTestSubmission2, getAllStudentSessionTestSubmissions, GetMyBigCourseSessionTestSubmissions, GetMyBigCourseSessionTestSubmissionsByDate, GetMySessionTestSubmission, getStudentListSessionTestSubmission, submitSessionTestAttempt, viewSubmittedSessionTest, viewSubmittedSessionTestTeacher } from './sessionTestSubmission';
+import { GetMyAttendanceProgressReport, getSessionAttendanceList, sessionAttendanceList } from './studentProgressReport';
+import { AddMentor, createBigCourse, updateBigCourse, updateBigCourse2, updateBigCourseMentorsFromTeachIntro } from './admin/adds';
+import { GetAllActiveMentors, GetAllCourses, GetAllMentors, GetPagedStudentList } from './admin/gets.';
+import { createCtest, createCtest2, createCtestSubmission, createCtestSubmission2, createImageCtestSubmission, deleteCTest, editCtest, editCtest2, finalizeImageCtestSubmission, generateCtestAnswerUploadUrl, generateCtestAttachmentUploadUrl, GetAllCtestSubmissionsByCourse, GetCtestSubmissionsByTest, GetCtests, GetMyBigCourseCtestSubmission, GetMyCtestSubmission, markImageAnswer, GetCtestSubmissionsByTest2, GetCourseTests, GetCourseTestQuestions, submitMcqCtest, submitImageCtest, viewSubmittedCtest, getCourseTestList } from './ctest';
 import { createMgSubscription, getMgSubscriptions, getMgSubscriptionsByStudent, getMgSubscriptionsByUserId, getMgSubscriptionsByUserId2, getMgSubscriptionsByUserId3, markMgSubscriptionAsFullyPaid, MgSubtoggleIsActive, updateMgSubscriptionDueDate } from './purchaseMgSub';
 import { GetCombinedStats } from './getCombinedStats';
 import { cancelScheduledNotifs, getScheduledNotifs, GetUserNotifications, InterceptAndPass, PassMultiNotifcation, updateScheduledNotifs } from './notifs';
@@ -194,7 +200,7 @@ import { getSignedUrlAws, getSignedUrlGcp, markRecordingAsWatched, updateRecordi
 import { addQuizWithQuestions, quizQuestionResponse } from './quiz';
 import { getAllQuizzes, getQuizWithStats, createQuiz, submitQuizResponse, endQuiz, getLeaderboardBySession, getLeaderboardByDay, getLeaderboardByCourse } from './sisyaQuiz';
 import { addGroupMemberEndpoint, createGroupEndpoint, deleteMessage, getAllGroupsAdmin, getGroupMessages, getMentorGroups, getNameByType, getReadReciept, getRecentMessagesGroup, getStudentGroups, markReadGroupMessage, sendGroupMessage, updateGroupType } from './courseGroupChat';
-import { addSessionAnalytics, addSessionAnalytics2, getAllAnalyticsData, getAllAnalyticsData2, getAllAnalyticsData3, getCourseFeedback, getFeedbackStatus, getStudentCourseAttendance, postStudentDailyAnalytics, submitFeedback, testMail } from './sessionAnalytics';
+import { addSessionAnalytics, addSessionAnalytics2, getAllAnalyticsData, getAllAnalyticsData2, getAllAnalyticsData3, getCourseFeedback, getFeedbackStatus, getSessionStudentAnalyticsWithAbsent, getStudentCourseAttendance, postStudentDailyAnalytics, submitFeedback, testMail } from './sessionAnalytics';
 
 import testRoutes from './routes/test.route'
 
@@ -204,6 +210,8 @@ import cors from "cors";
 // import './jobs/dailyAnalytics'
 import './jobs/scheduledNotifCron'
 import './jobs/courseRatingUpdate'
+import './jobs/announcementCron'
+import { startBlogCron } from "./jobs/schedulingBlog"
 import { createAiReview, getAllAiReview, getAllAiReview2, toggleAiReviewVisibility } from './aiReview';
 import upload from './middlewares/multer';
 import { AccessRequestReview, AdminAuditLogs, ApproverAssign, ContentPreview, ContentRequestAccess, ContentReview, ContentUpload } from './content';
@@ -211,7 +219,7 @@ import { authAdmin, authAdminOrMentor, authAnyone, authMentor, authUser } from '
 import { createWorkers } from './mediasoup/createWorkers';
 // import { classroomSocketHandler } from './sockets/classroom';
 import { openSessionSocketHandler } from './sockets/openSession';
-import { bookSession, createOpenSession, deleteOpenSession, endOpenSession, getOpenSessionById, getOpenSessions, startOpenSession, updateOpenSession } from './openSessionController';
+import { bookSession, createOpenSession, deleteOpenSession, endOpenSession, getOpenSessionById, getOpenSessions, getOpenSessionsByMentor, startOpenSession, updateOpenSession } from './openSessionController';
 import { pdfHandler } from './pdfHandler';
 import { uploadSingle } from './middlewares/multerMiddleware';
 import { getClassCardWeb, updateClassCardWeb, uploadClassCardWeb } from './classCardWeb';
@@ -220,7 +228,7 @@ import { createBlogAdBanner, createCoursePageBanner, createTestimonalReelLink, c
 import { createTestimonialCard, deleteTestimonialCard, getAllTestimonialCards, updateTestimonialCard } from './testimonialCard';
 import { createFacultyMemberCard, deleteFacultyMemberCard, getAllFacultyMemberCards, updateFacultyMemberCard } from './facultyMemberWebCard';
 import { createBigCourseWeb, createChapterWeb, createSubjectWeb, getAllBigCourseWeb, getBigCourseWebByBigCourseId, getBigCourseWebByGrade, getBigCourseWebById, getChaptersBySubjectWeb, getSubjectsByCourseWeb, updateBigCourseWeb, updateChapterWeb, updateSubjectWeb } from './courseWeb';
-import { addComment, createBlog, createBlog2, createBlog3, deleteBlog, deleteTag, generateBlogAssetUploadUrl, getAllBlogs, getAllTags, getBlogById, getBlogsByTag, getNestedComments, getTopTags, getTrendingBlogs, toggleLikeBlog, updateBlog, updateBlogReadCount } from './blogs';
+import { addComment, createBlog, createBlog2, createBlog3, createBlog4, deleteBlog, deleteTag, generateBlogAssetUploadUrl, getAdminBlogs, getAllBlogs, getAllTags, getBlogById, getBlogsByTag, getNestedComments, getPublicBlogs, getTopTags, getTrendingBlogs, toggleLikeBlog, updateBlog, updateBlogReadCount } from './blogs';
 import { createNews, deleteNews, generateNewsAssetUploadUrl, getAllNews, getNewsById, updateNews } from './news';
 import { GetAllSubAdmins, InsertSubAdmin, ToggleSubAdminActive, UpdateSubAdmin } from './subadmin';
 import { deleteGlobalMaterial, generateGlobalMaterialUploadUrl, getAllGlobalMaterials, getGlobalMaterials, getGlobalMaterialsByClass, getGlobalMaterialsByClassAndType, saveGlobalMaterialMetadata } from './globalMaterial';
@@ -228,6 +236,10 @@ import { getPeersInSession } from './getRoomPeer';
 import { videocallSocketHandlerNew } from './sockets/videocall';
 import { createSipAppointmentLead, createSipCarousel1, createSipCarousel2, createSipMentor, deleteSipCarousel1, deleteSipCarousel2, deleteSipMentor, getSipAppointmentLeads, getSipCarousel1, getSipCarousel2, getSipMentors, updateSipMentorOrder } from './sip';
 import { generateUploadUrl } from './upload_genral';
+import { AnnouncementController } from './announcement';
+import { GetMentorDoubtDetails, GetMentorPerformanceSummary, GetMentorReviewDetails, GetMentorRewardTransactions, GetSessionsByMentor, GetStudentAttendanceDetails, GetStudentCoinDetails, GetStudentDoubtDetails, GetStudentHomeworkDetails, GetStudentPerformanceSummary, GetStudentQuizDetails, GetStudentReviewDetails, GetStudentsByCourse, GetStudentTestDetails, GetCoursePerformanceSummary, GetCourseSessionDetails, GetCourseHomeworkDetails, GetCourseReviewDetails, GetCourseTestDetails, GetPresentStudents, GetSessionReviews } from './adminAnalytics';
+import { GetAdminDashboardOverview, GetEnrollmentTrends, GetSessionTrends, GetCoursePerformanceStats, GetAssessmentCompletionStats, GetMentorPerformanceStats, GetDoubtTrends, GetRatingDistribution, GetRecentActivity } from "./adminDashboardAPI";
+import { banStudent, unbanStudent, banStudentWebhook } from './userBanController';
 
 interface CustomSocket extends Socket {
   user?: any;
@@ -329,7 +341,9 @@ app.use('/test_route', testRoutes)
 
 app.post("/test", testMail);
 
-// TODO: add teacher auth tp this routes
+startBlogCron();
+
+// TODO: add teacher auth to this routes
 //teacher routes: 
 app.post("/teacher/login", MentorLogin)
 app.post("/teacher/insert_assignments", authMentor, InsertAssignmentWithFiles)
@@ -351,6 +365,7 @@ app.post("/teacher/get_my_big_course_students", authMentor, GetMyBigCourseStuden
 app.post("/teacher/get_multiple_student_info", authMentor, GetMultipleStudentInfo)
 app.post("/teacher/get_student_course_attendence_record", authMentor, getStudentAttendanceRecords)
 app.post("/teacher/get_session_attendance_student_list", authMentor, getStudentListBySession)
+
 app.post("/teacher/add_session_test", authMentor, InsertSessionTests)
 app.post("/teacher/add_session_test2", authMentor, InsertSessionTests2)
 app.post("/teacher/update_mentor", authMentor, updateMentor)
@@ -362,6 +377,7 @@ app.post("/teacher/start_session2", authMentor, InsertNewSessionStream2)
 app.post("/teacher/get_ctests", authMentor, GetCtests)
 app.post("/teacher/get_qtests", authMentor, Getqtests)
 app.post("/teacher/update_device_id", authMentor, updateMentorDeviceId);
+app.post("/teacher/update_mobile_device_id", authMentor, updateMentorMobileDeviceId);
 app.post("/teacher/get_assigned_doubts_users", authMentor, getAssignedDoubts)
 app.post("/teacher/sales/my_leads", MyLeads)//sales auth
 app.post("/teacher/sales/add_lead", InsertLead) //sales auth
@@ -421,6 +437,7 @@ app.post("/teacher/upload_course_material", authMentor, UploadCourseMaterials)
 app.post("/teacher/insert_qtest", authMentor, createqtest)
 app.post("/teacher/get_conversation", authMentor, GetConversationn)
 app.post("/teacher/send_notif2", authMentor, InterceptAndPass)
+app.post("/teacher/get_announcements", authMentor, AnnouncementController.getTeacherAnnouncements)
 app.post("/teacher/get_token", authMentor, callToken)
 app.post("/teacher/send_call_ios", authMentor, ProdinitiateCallHandler)
 app.post("/teacher/edit_session", authMentor, EditSession)
@@ -430,6 +447,14 @@ app.post("/teacher/insert_ctest", authMentor, createCtest)
 app.post("/teacher/insert_ctest2", authMentor, createCtest2)
 app.post("/teacher/edit_ctest", authMentor, editCtest)
 app.post("/teacher/edit_ctest2", authMentor, editCtest2)
+app.post("/teacher/get_teacher_courses", authMentor, getMentorCourses)
+app.post("/teacher/get_teacher_courses_with_session", authMentor, getMentorCoursesWithSessions)
+app.post("/teacher/get_my_bigCourse_session_test_submissions", authMentor, GetMyBigCourseSessionTestSubmissions)
+app.post("/teacher/get_all_student_homework_submissions", authMentor, getAllStudentSessionTestSubmissions)
+app.post("/teacher/view_submitted_session_homework", authMentor, viewSubmittedSessionTestTeacher)
+app.post("/get_doubt_review_by_mentorId", authMentor, getReviewsByMentorId)
+app.post("/teacher/get_attendance_by_session", authMentor, getSessionAttendanceList)
+
 
 //content-management
 app.post('/teacher/content/upload', authMentor, upload.single("ppt"), ContentUpload);
@@ -460,6 +485,7 @@ app.post("/admin/update_subject", authAdmin, updateSubject)
 app.post("/admin/create_student", authAdmin, createUserAdmin)
 app.post("/admin/update_student", authAdmin, updateUserAdmin)
 app.post("/admin/get_mentors", authAdmin, GetAllMentors)
+app.post("/admin/get_active_mentors", authAdmin, GetAllActiveMentors);
 app.post("/admin/get_mentor_by_id", authAdmin, GetMentor)
 app.post("/admin/get_course", authAdmin, GetAllCourses)
 app.post("/get_course_web", GetAllCourses) // website no auth
@@ -495,8 +521,10 @@ app.post("/admin/send_notif2", InterceptAndPass)
 app.post("/admin/get_scheduled_notifs", authAdmin, getScheduledNotifs)
 app.post("/admin/cancel_scheduled_notifs", authAdmin, cancelScheduledNotifs)
 app.post("/admin/update_scheduled_notifs", authAdmin, updateScheduledNotifs)
+app.post("/admin/create_announcement", authAdmin, AnnouncementController.handleCreateAnnouncement)
+app.post("/admin/get_all_announcements", authAdmin, AnnouncementController.getAllAnnouncements)
 app.post("/admin/all_doubts", authAdmin, GetAllDoubts)
-app.post("/admin/create_doubt_package", authAdmin, createDoubtPackage)
+app.post("/admin/create_doubt_package", authAdmin, createDoubtPackage2)
 app.post("/admin/update_doubt_package", authAdmin, updateDoubtPackage)
 app.post("/admin/delete_doubt_package", authAdmin, deleteDoubtPackage)
 app.post("/admin/get_all_doubt_packages", authAdmin, getAllDoubtPackages)
@@ -546,8 +574,46 @@ app.post("/admin/get_mg_subs", authAdmin, getMgSubscriptionsByUserId2)
 app.post("/admin/v1/get_mg_subs", authAdmin, getMgSubscriptionsByUserId3)
 app.post("/admin/get_subjects_by_grade", authAdmin, GetSubjectByGrade)
 app.post("/admin/create_open_session", authAdmin, createOpenSession)
+app.post("/admin/update_teacher_for_course", authAdmin, updateBigCourseMentorsFromTeachIntro)
+app.post("/admin/get_course_by_grade", authAdmin, GetBigCoursesByGrade);
+app.post("/admin/get_students_by_course", authAdmin, GetStudentsByCourse);
+app.post("/admin/performance/course/summary", authAdmin, GetCoursePerformanceSummary);
+app.post("/admin/performance/course/sessions", authAdmin, GetCourseSessionDetails);
+app.post("/admin/performance/course/homework", authAdmin, GetCourseHomeworkDetails);
+app.post("/admin/performance/course/reviews", authAdmin, GetCourseReviewDetails);
+app.post("/admin/performance/course/tests", authAdmin, GetCourseTestDetails);
+app.post("/admin/performance/summary", authAdmin, GetStudentPerformanceSummary);
+app.post("/admin/performance/attendance", authAdmin, GetStudentAttendanceDetails);
+app.post("/admin/performance/quizzes", authAdmin, GetStudentQuizDetails);
+app.post("/admin/performance/tests", authAdmin, GetStudentTestDetails);
+app.post("/admin/performance/homework", authAdmin, GetStudentHomeworkDetails);
+app.post("/admin/performance/coins", authAdmin, GetStudentCoinDetails);
+app.post("/admin/performance/doubts", authAdmin, GetStudentDoubtDetails);
+app.post("/admin/performance/reviews", authAdmin, GetStudentReviewDetails);
+app.post("/admin/get_present_students", authAdmin, GetPresentStudents);
+app.post("/admin/get_session_reviews", authAdmin, GetSessionReviews);
+app.post("/admin/get_sessions_by_mentor", authAdmin, GetSessionsByMentor);
+app.post("/admin/performance/mentor/summary", authAdmin, GetMentorPerformanceSummary);
+app.post("/admin/get_mentor_reward_transactions", authAdmin, GetMentorRewardTransactions);
+app.post("/admin/performance/mentor/reviews", authAdmin, GetMentorReviewDetails);
+app.post("/admin/performance/mentor/doubts", authAdmin, GetMentorDoubtDetails);
+app.post("/admin/get_completed_session", authAdmin, GetCompletedSessionsAdmin);
 app.post("/update_open_session", updateOpenSession)
+app.post("/admin/get_session_attendance", authAdmin, getSessionStudentAnalyticsWithAbsent);
+app.post("/admin/get_completed_session", authAdmin, GetCompletedSessionsAdmin);
 app.post("/delete_open_session", deleteOpenSession);
+app.post("/admin/dashboard/overview", authAdmin, GetAdminDashboardOverview);
+app.post("/admin/dashboard/trends/enrollment", authAdmin, GetEnrollmentTrends);
+app.post("/admin/dashboard/trends/sessions", authAdmin, GetSessionTrends);
+app.post("/admin/dashboard/performance/courses", authAdmin, GetCoursePerformanceStats);
+app.post("/admin/dashboard/assessment/completion", authAdmin, GetAssessmentCompletionStats);
+app.post("/admin/dashboard/performance/mentors", authAdmin, GetMentorPerformanceStats);
+app.post("/admin/dashboard/trends/doubts", authAdmin, GetDoubtTrends);
+app.post("/admin/dashboard/ratings/distribution", authAdmin, GetRatingDistribution);
+app.post("/admin/dashboard/activity/recent", authAdmin, GetRecentActivity);
+app.post("/admin/ban-student", authAdminOrMentor, banStudent);
+app.post("/admin/unban-student", authAdmin, unbanStudent);
+app.post("/webhook/ban-student", banStudentWebhook);
 //-----------------assets------------------------------------
 
 app.post('/admin/hr/asset_create', createAsset);
@@ -578,7 +644,9 @@ app.post("/admin/create_subadmin", InsertSubAdmin);
 app.post("/admin/toggle_subadmin", ToggleSubAdminActive);
 app.post("/admin/update_subadmin", UpdateSubAdmin);
 app.post("/admin/get_all_subadmin", GetAllSubAdmins);
+app.post("/admin/mark_as_sisya_emp", authAdmin, markUserAsSisyaEmp);
 
+app.post("/admin/get_all_doubt_leads", getAllDoubtLeads);
 
 app.use("/edtech", pythonApiProxy)
 //------------------ admin routes end here ------------------
@@ -614,6 +682,8 @@ app.post("/purchase_doubt_package", authUser, purchaseDoubtPackage)
 app.post("/get_doubt_purchase_history", authUser, getDoubtPurchaseHistory)
 app.post("/assign_mentor_doubt", authUser, AssignMentor)
 app.patch("/update_doubt", authUser, updateDoubt)
+app.post('/create_doubt_lead', authUser, createOrUpdateDoubtLead)
+app.post('/update_doubt_lead', updateDoubtLeadStatus)
 
 // Doubt Slot Management Routes
 app.post("/teacher/create_doubt_slot", authMentor, createDoubtSlot)
@@ -623,6 +693,7 @@ app.post("/teacher/delete_doubt_slot", authMentor, deleteDoubtSlot)
 app.post("/teacher/get_slot_bookings", authMentor, getMentorSlotBookings)
 app.post("/teacher/cancel_doubt_slot_booking", authMentor, cancelSlotBooking)
 app.post("/teacher/complete_doubt_slot_booking", authMentor, completeSlotBooking)
+app.post("/teacher/get_tests", authMentor, getCourseTestList)
 
 app.post("/admin/create_doubt_slot", authAdmin, createDoubtSlot)
 app.post("/admin/get_doubt_slots", authAdmin, getDoubtSlots)
@@ -728,6 +799,8 @@ app.post("/get_combined_stats", authUser, GetCombinedStats)
 app.post("/get_materials", authUser, getMaterialFilesList)
 app.post("/get_materials_with_time", authUser, getMaterialFilesListwithTime)
 app.post("/get_user_notifications", authUser, GetUserNotifications)
+app.post("/get_announcements", authUser, AnnouncementController.getStudentAnnouncements)
+app.post("/announcement/mark_as_read", authAnyone, AnnouncementController.markAsRead)
 app.post("/get_my_profile", authUser, GetUserById)
 app.post("/get_my_id_from_uuid", GetUserIdByUuid)
 app.post("/get_subject_by_id", authUser, GetSubjectById)
@@ -739,6 +812,7 @@ app.post("/insert_attendance", authUser, insertAttendanceRecord)
 app.post("/insert_attendance_exit", authUser, RecordAttendanceExitTime)
 app.post("/insert_mentor_rating", authUser, InsertMentorRating)
 app.post("/get_mentor_rating", authUser, GetMentorRatings)
+app.post("/teacher/get_mentor_rating", authMentor, GetMentorRatings)
 app.post("/create_order", authUser, createOrder)
 app.post("/create_inq", createInq)
 app.post("/mark_login_sales", authUser, markLoginSales)
@@ -774,6 +848,7 @@ app.post("/get_my_vm_ip", GetVMIP);
 app.post("/recording-uploaded", recordingUploadedWebhook);
 app.post("/apn_token_update", UpdateApnToken);
 app.post("/get_open_session2", authAnyone, getOpenSessions);
+app.post("/get_open_session_by_mentor", authAnyone, getOpenSessionsByMentor);
 app.post("/get_open_session_id2", authAnyone, getOpenSessionById);
 app.post("/book_open_session", authUser, bookSession);
 app.post("/start_open_session", startOpenSession);
@@ -781,6 +856,8 @@ app.post("/end_open_session", endOpenSession);
 app.post('/get_attendance_detail', authUser, getStudentCourseAttendance);
 app.post("/get_all_courses", GetMentorCourses)
 app.post("/get_course", GetAllCourses) //for website no auth
+app.post("/create_doubt_review", authUser, createDoubtReview);
+
 app.post("/send_msg_x", (request: Request, response: Response) => { sendMsgx(request.body.phone, request.body.template).then(_ => { response.json({ success: true }) }) })//
 
 //website new routes
@@ -824,7 +901,9 @@ app.post('/get_chapters_by_subject_web', getChaptersBySubjectWeb);
 app.put('/update_chapter_web', updateChapterWeb);
 app.post('/create_blog', createBlog2);
 app.post('/create_blog2', createBlog3);
-app.post('/get_all_blogs', getAllBlogs);
+app.post('/create_blog3', createBlog4);
+app.post('/get_all_blogs', getPublicBlogs);
+app.post('/get_admin_blog', getAdminBlogs);
 app.post('/get_blog_by_id', getBlogById);
 app.post('/update_blog', updateBlog);
 app.post('/delete_blog', deleteBlog);
@@ -1150,6 +1229,34 @@ io.on('connection', (socket: CustomSocket) => {
       socket.to(senderId).emit("accept_message", { type, content, from: socket.user.id })
     } else { insertMessage(to, socket.user.id, type, content, false) }
   });
+
+  socket.on("update_doubt_status", async ({ doubtId, status, from, to }) => {
+
+    try {
+      const receiverSocketId = SocketToUserIdMap.get(to)
+
+      console.log("Doubt Status Update:", {
+        doubtId,
+        status,
+        from,
+        to
+      })
+
+      // Send realtime event
+      if (receiverSocketId) {
+        socket.to(receiverSocketId).emit("doubt_status_update", {
+          doubtId,
+          status,
+          from
+        })
+      }
+
+    } catch (err) {
+      console.error("Socket doubt status update failed", err)
+    }
+
+  })
+
 
   socket.on("gc:message:send", ({ to, type, content }) => {
     console.log(to, type, content)

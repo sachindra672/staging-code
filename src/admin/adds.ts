@@ -669,3 +669,111 @@ export async function updateBigCourse2(req: Request, res: Response) {
         }
     }
 }
+
+export async function updateBigCourseMentorsFromTeachIntro(
+    req: Request,
+    res: Response
+) {
+
+    const { courseId, TiArr } = req.body;
+
+    if (!courseId || isNaN(Number(courseId))) {
+        return res.status(400).json({
+            success: false,
+            error: "Valid courseId is required"
+        });
+    }
+
+    if (!Array.isArray(TiArr) || TiArr.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: "TiArr (TeachIntro list) is required"
+        });
+    }
+
+    const mentorIds = [
+        ...new Set(
+            TiArr.map((t: any) => Number(t.mentorId))
+        )
+    ];
+
+    if (mentorIds.some(id => isNaN(id) || id <= 0)) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid mentorId found in TiArr"
+        });
+    }
+
+    try {
+        const mentors = await prisma.mentor.findMany({
+            where: {
+                id: { in: mentorIds }
+            },
+            select: { id: true }
+        });
+
+        if (mentors.length !== mentorIds.length) {
+            return res.status(400).json({
+                success: false,
+                error: "One or more mentor IDs do not exist"
+            });
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const updatedCourse = await tx.bigCourse.update({
+
+                where: {
+                    id: Number(courseId)
+                },
+
+                data: {
+                    mentorList: mentorIds,
+                    modifiedOn: new Date()
+                },
+
+                select: {
+                    id: true,
+                    name: true,
+                    mentorList: true
+                }
+            });
+
+            await tx.teachIntro.deleteMany({
+                where: {
+                    bigCourseId: Number(courseId)
+                }
+            });
+
+            await tx.teachIntro.createMany({
+                data: TiArr.map((t: any) => ({
+                    mentorId: Number(t.mentorId),
+                    subjectId: Number(t.subjectId),
+                    comment: t.comment || "",
+                    bigCourseId: Number(courseId),
+                    createdOn: new Date(),
+                    modifiedOn: new Date()
+                }))
+            });
+
+            return updatedCourse;
+        });
+
+        await invalidateCache("bigCourses:*");
+
+        return res.status(200).json({
+            success: true,
+            message: "Mentors updated from TeachIntro successfully",
+            data: result
+        });
+
+    } catch (error) {
+
+        console.error("updateBigCourseMentorsFromTeachIntro error:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error"
+        });
+    }
+}
+

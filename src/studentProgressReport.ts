@@ -63,3 +63,59 @@ export async function GetMyAttendanceProgressReport(req: Request, res: Response)
 
     }
 }
+
+export const getSessionAttendanceList = async (req: Request, res: Response) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                message: "sessionId is required"
+            });
+        }
+
+        const attendanceList = await prisma.attendanceRecord.findMany({
+            where: {
+                sessionId: Number(sessionId)
+            },
+            orderBy: {
+                createdOn: "asc" // join order
+            },
+            select: {
+                id: true,
+                createdOn: true,
+                exitTime: true,
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true
+                    }
+                }
+            }
+        });
+
+        const formatted = attendanceList.map(record => ({
+            attendanceId: record.id,
+            studentId: record.user.id,
+            studentName: record.user.name,
+        }));
+
+        res.status(200).json({
+            success: true,
+            totalStudents: formatted.length,
+            data: formatted
+        });
+
+    } catch (error) {
+        console.error("getSessionAttendanceList error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+

@@ -222,13 +222,13 @@ export const videocallSocketHandlerNew = (
     });
 
     // Get existing producers
-    socket.on('vc-get-existing-producers', ({ callId }, callback: (resp: { producers: { id: string; kind: MediaKind; peerId: string; source: string; isTeacher: boolean }[], error?: string }) => void) => {
+    socket.on('vc-get-existing-producers', ({ callId }, callback: (resp: { producers: { id: string; kind: MediaKind; peerId: string; source: string; isTeacher: boolean; isPaused: boolean }[], error?: string }) => void) => {
         console.log('[VC] vc-get-existing-producers received', { callId, socketId: socket.id });
         try {
             const room = getVideoRoom(callId);
             if (!room) throw new Error('Room not found');
 
-            const producers: { id: string; kind: MediaKind; peerId: string; source: string; isTeacher: boolean }[] = [];
+            const producers: { id: string; kind: MediaKind; peerId: string; source: string; isTeacher: boolean; isPaused: boolean }[] = [];
             room.peers.forEach((peer, peerId) => {
                 peer.producers
                     .filter(p => !p.closed)
@@ -238,7 +238,8 @@ export const videocallSocketHandlerNew = (
                             kind: producer.kind,
                             peerId,
                             source: (producer.appData?.source as string) || 'unknown',
-                            isTeacher: (producer.appData?.role as string) === 'mentor'
+                            isTeacher: (producer.appData?.role as string) === 'mentor',
+                            isPaused: producer.paused
                         });
                     });
             });
@@ -266,6 +267,17 @@ export const videocallSocketHandlerNew = (
                 return callback({ error: 'Only mentor can share screen' });
             }
 
+            console.log({"upcoming_kind":kind,"upcoming_source":source,"existing_kind":peer.producers});
+            console.log(
+                'peer.producers',
+                peer.producers.map((p) => ({
+                    id: p.id,
+                    kind: p.kind,
+                    source: p.appData?.source,
+                    paused: p.paused,
+                    closed: p.closed,
+                }))
+            );
             const producer = peer.producers.find(p => p.kind === kind && p.appData?.source === source);
             if (!producer) throw new Error('Producer not found');
 
@@ -273,11 +285,20 @@ export const videocallSocketHandlerNew = (
             else if (action === 'resume') await producer.resume();
             else throw new Error('Invalid action');
 
+            // Update peer state
+            if (kind === 'audio') {
+                peer.micPaused = action === 'pause';
+            } else if (kind === 'video' && source === 'camera') {
+                peer.cameraPaused = action === 'pause';
+            }
+
             io.to(callId).emit('vc-peer-media-status', {
                 peerId: user.info.uuid,
                 kind,
                 source,
                 isPaused: action === 'pause',
+                name: user.info.name,
+                role: user.role,
             });
 
             console.log('[VC] Toggled producer', { callId, kind, source, action });

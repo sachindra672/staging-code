@@ -167,6 +167,70 @@ export const createBlog3 = async (req: Request, res: Response) => {
     }
 };
 
+export const createBlog4 = async (req: Request, res: Response) => {
+    try {
+        const {
+            title,
+            banner,
+            des,
+            content,
+            authorName,
+            authorProfile,
+            tags,
+            draft,
+            scheduledAt
+        } = req.body;
+
+        const now = new Date();
+
+        let publishStatus: "DRAFT" | "SCHEDULED" | "PUBLISHED" = "PUBLISHED";
+        let publishedAt = now;
+
+        if (draft) {
+            publishStatus = "DRAFT";
+        } else if (scheduledAt && new Date(scheduledAt) > now) {
+            publishStatus = "SCHEDULED";
+            publishedAt = new Date(scheduledAt);
+        }
+
+        const newBlog = await prisma.blog.create({
+            data: {
+                title,
+                banner,
+                des,
+                content,
+                authorName,
+                authorProfile,
+                draft: !!draft,
+                publishStatus,
+                scheduledAt: publishStatus === "SCHEDULED" ? new Date(scheduledAt) : null,
+                publishedAt,
+
+                tags: tags?.length
+                    ? {
+                        create: tags.map((tag: { id: string; name: string }) => ({
+                            tag: {
+                                connectOrCreate: {
+                                    where: { id: tag.id },
+                                    create: { id: tag.id, name: tag.name },
+                                },
+                            },
+                        })),
+                    }
+                    : undefined,
+            },
+        });
+
+        await invalidateCache('blogs:*');
+
+        res.json(newBlog);
+    } catch (err) {
+        console.error('Error creating blog:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+
 
 export const getBlogById = async (req: Request, res: Response) => {
     try {
@@ -543,5 +607,118 @@ export const updateBlogReadCount = async (req: Request, res: Response) => {
     } catch (err) {
         console.error('Error updating read count:', err);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+export const getPublicBlogs = async (req: Request, res: Response) => {
+    try {
+        const page = Number(req.body.page) || 1;
+        const limit = Number(req.body.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const now = new Date();
+
+        const cacheKey = `blogs:public:page:${page}:limit:${limit}`;
+        const cached = await getCache(cacheKey);
+        if (cached) return res.json({ cached: true, ...cached });
+
+        const where = {
+            deleted: false,
+            publishStatus: "PUBLISHED",
+            publishedAt: { lte: now },
+        };
+
+        const [blogs, total] = await Promise.all([
+            prisma.blog.findMany({
+                skip,
+                take: limit,
+                where,
+                orderBy: { publishedAt: "desc" },
+                include: {
+                    tags: { include: { tag: true } },
+                },
+            }),
+            prisma.blog.count({ where }),
+        ]);
+
+        const data = { total, page, limit, blogs };
+        await setCache(cacheKey, data, 120);
+
+        res.json(data);
+    } catch (err) {
+        console.error("Error fetching public blogs:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+export const getAdminBlogs = async (req: Request, res: Response) => {
+    try {
+        const page = Number(req.body.page) || 1;
+        const limit = Number(req.body.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const { status, authorName } = req.body;
+
+        const where: any = {
+            deleted: false,
+        };
+
+        if (status) {
+            where.publishStatus = status; // DRAFT | SCHEDULED | PUBLISHED
+        }
+
+        if (authorName) {
+            where.authorName = { contains: authorName, mode: "insensitive" };
+        }
+
+        const [blogs, total] = await Promise.all([
+            prisma.blog.findMany({
+                skip,
+                take: limit,
+                where,
+                orderBy: { updatedAt: "desc" },
+                include: {
+                    tags: { include: { tag: true } },
+                    likedBy: true,
+                },
+            }),
+            prisma.blog.count({ where }),
+        ]);
+
+        res.json({
+            total,
+            page,
+            limit,
+            blogs,
+        });
+    } catch (err) {
+        console.error("Error fetching admin blogs:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+export const publishScheduledBlogs = async () => {
+    try {
+        const now = new Date();
+
+        const result = await prisma.blog.updateMany({
+            where: {
+                deleted: false,
+                publishStatus: "SCHEDULED",
+                scheduledAt: {
+                    lte: now,
+                },
+            },
+            data: {
+                publishStatus: "PUBLISHED",
+            },
+        });
+
+        if (result.count > 0) {
+            console.log(`[CRON] Published ${result.count} scheduled blogs`);
+            await invalidateCache("blogs:*");
+        }
+    } catch (error) {
+        console.error("[CRON] Error publishing scheduled blogs:", error);
     }
 };
