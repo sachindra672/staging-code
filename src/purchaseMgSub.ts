@@ -14,7 +14,9 @@ export async function createMgSubscription(req: Request, res: Response) {
         bigCourseId,
         isPartialPaid,
         OrderId,
-        dueDate
+        dueDate,
+        bigCourseBundleId,
+        isFullCourse = true
     } = req.body
 
     if (!PurchasePrice || !cgst || !sgst || !basePrice || !endUsersId || !bigCourseId || !OrderId) {
@@ -65,6 +67,8 @@ export async function createMgSubscription(req: Request, res: Response) {
                 isPartialPaid,
                 isFullPaid: finalIsFullPaid,
                 dueDate: finalDueDate,
+                isFullCourse: !!isFullCourse,
+                bigCourseBundleId: bigCourseBundleId ? Number(bigCourseBundleId) : null,
             }
         })
 

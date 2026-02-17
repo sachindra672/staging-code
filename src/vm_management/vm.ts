@@ -20,7 +20,7 @@ const operationsClient = new ZoneOperationsClient();
 
 // Base image for all class VMs
 const BASE_IMAGE =
-  "https://www.googleapis.com/compute/v1/projects/sisya-class-52660/global/images/staging-class-vm-2";
+  "https://www.googleapis.com/compute/v1/projects/sisya-class-52660/global/images/staging-class-vm-12";
 
 /**
  * 🚀 Create a new class VM

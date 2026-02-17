@@ -1,5 +1,6 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
+import { getUserSubjectFilter } from './utils/subscriptionUtils';
 import { grantTaskReward } from './sisyacoin/taskRewardController'
 import { getSystemWallet } from './config/sisyacoinHelperFunctions'
 import { Decimal } from "@prisma/client/runtime/library";
@@ -906,8 +907,13 @@ export async function GetMyBigCourseSessionTestSubmissions(req: Request, res: Re
     }
 
     try {
+        const subjectFilter = await getUserSubjectFilter(req.user || endUsersId, req.role || 'user', Number(bigCourseId));
+
         const sessions = await prisma.session.findMany({
-            where: { bigCourseId: Number(bigCourseId) },
+            where: {
+                bigCourseId: Number(bigCourseId),
+                ...subjectFilter
+            },
             include: {
                 SessionTest: {
                     include: {

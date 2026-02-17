@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from './misc';
+import { getUserSubjectFilter } from './utils/subscriptionUtils';
 import { sendAnalyticsMail } from "./utils/mail";
 import * as XLSX from "xlsx";
 import { grantTaskReward } from './sisyacoin/taskRewardController'
@@ -2338,9 +2339,14 @@ export async function getStudentCourseAttendance(req: Request, res: Response) {
             return res.status(400).json({ error: "Invalid studentId or courseId" });
         }
 
+        const subjectFilter = await getUserSubjectFilter(req.user || studentId, req.role || 'user', Number(courseId));
+
         // 1. Get all sessions for this course
         const sessions = await prisma.session.findMany({
-            where: { bigCourseId: courseId },
+            where: {
+                bigCourseId: courseId,
+                ...subjectFilter
+            },
             include: {
                 analytics: true,
             },
@@ -2352,7 +2358,10 @@ export async function getStudentCourseAttendance(req: Request, res: Response) {
             where: {
                 studentId,
                 sessionAnalytics: {
-                    session: { bigCourseId: courseId },
+                    session: {
+                        bigCourseId: courseId,
+                        ...subjectFilter
+                    },
                 },
             },
             include: {
@@ -2477,7 +2486,7 @@ export const getSessionStudentAnalyticsWithAbsent = async (
                                 email: true,
                                 phone: true,
                                 isActive: true,
-                                isSisyaEmp: true, 
+                                isSisyaEmp: true,
                             },
                         },
                     },
@@ -2503,7 +2512,7 @@ export const getSessionStudentAnalyticsWithAbsent = async (
                 isActive: true,
                 user: {
                     isActive: true,
-                    isSisyaEmp: false, 
+                    isSisyaEmp: false,
                 },
             },
             select: {
@@ -2524,7 +2533,7 @@ export const getSessionStudentAnalyticsWithAbsent = async (
             if (
                 !st.student ||
                 st.student.isActive === false ||
-                st.student.isSisyaEmp === true 
+                st.student.isSisyaEmp === true
             ) {
                 continue;
             }

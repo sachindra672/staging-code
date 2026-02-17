@@ -4,6 +4,7 @@ import { generateToken04 } from './zego'
 import { randomUUID } from 'crypto'
 import { createClassVM, deleteClassVM } from './vm_management/vm';
 import { invalidateCache } from './utils/cacheUtils';
+import { MaterialSource } from '@prisma/client'
 
 const appId = 1500762473; // Your App ID
 const serverSecret = "175fa0e5958efde603f2ec805c7d6120";
@@ -56,6 +57,45 @@ export async function EditSession(req: Request, res: Response) {
     } catch (error) {
         console.log(error)
         res.json({ success: false, error })
+    }
+}
+export async function GetSessionsWithMaterialsByBigCourse(req: Request, res: Response) {
+    const { bigCourseId } = req.body
+    try {
+        const [sessions, legacyCourseMaterials] = await Promise.all([
+            prisma.session.findMany({
+                where: { bigCourseId },
+                select: {
+                    id: true,
+                    detail: true,
+                    startTime: true,
+                    endTime: true,
+                    isDone: true,
+                    isGoingOn: true,
+                    subject: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    },
+                    courseMaterials: true
+                },
+                orderBy: {
+                    startTime: 'desc'
+                }
+            }),
+            prisma.courseMaterial.findMany({
+                where: {
+                    bigCourseId,
+                    source: MaterialSource.LEGACY
+                }
+            })
+        ])
+
+        res.json({ success: true, sessions, legacyCourseMaterials })
+    } catch (error) {
+        console.error('Error in GetSessionsWithMaterialsByBigCourse:', error);
+        res.status(500).json({ success: false, error })
     }
 }
 

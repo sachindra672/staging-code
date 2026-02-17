@@ -1,5 +1,6 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
+import { getUserSubjectFilter } from './utils/subscriptionUtils';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 export async function createqtest(req: Request, res: Response) {
@@ -110,8 +111,16 @@ export async function Getqtests(req: Request, res: Response) {
     }
 
     try {
+        const session = await prisma.session.findUnique({ where: { id: Number(sessionId) }, select: { bigCourseId: true } });
+        if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+
+        const subjectFilter = await getUserSubjectFilter(req.user, req.role, session.bigCourseId);
+
         const qtests = await prisma.qtest.findMany({
-            where: { sessionId },
+            where: {
+                sessionId: Number(sessionId),
+                ...subjectFilter,
+            },
             include: { qtestQuestions: true }
         });
 
@@ -239,7 +248,14 @@ export async function GetMyBigCourseqtestSubmission(req: Request, res: Response)
     }
 
     try {
-        const qtestIds = (await prisma.qtest.findMany({ where: { bigCourseId }, select: { id: true } })).map(e => e.id)
+        const subjectFilter = await getUserSubjectFilter(req.user || endUsersId, req.role || "user", Number(bigCourseId));
+        const qtestIds = (await prisma.qtest.findMany({
+            where: {
+                bigCourseId: Number(bigCourseId),
+                ...subjectFilter,
+            },
+            select: { id: true }
+        })).map(e => e.id)
         const mySubmissions = await prisma.qtestSubmission.findMany({
             where: {
                 endUsersId: endUsersId,

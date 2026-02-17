@@ -1,5 +1,6 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
+import { getUserSubjectFilter } from './utils/subscriptionUtils';
 import { session } from '@prisma/client'
 
 export async function sessionAttendanceList(req: Request, res: Response) {
@@ -43,9 +44,24 @@ export async function GetMyAttendanceProgressReport(req: Request, res: Response)
     const { bigCourseId, endUsersId } = req.body
 
     try {
-        const attendanceRecords = await prisma.attendanceRecord.findMany({ where: { bigCourseId, endUsersId }, })
+        const subjectFilter = await getUserSubjectFilter(req.user || endUsersId, req.role || 'user', Number(bigCourseId));
+
+        const attendanceRecords = await prisma.attendanceRecord.findMany({
+            where: {
+                bigCourseId: Number(bigCourseId),
+                endUsersId: Number(endUsersId),
+                session: subjectFilter
+            }
+        })
         const sessionsAttended = attendanceRecords.map(e => e.sessionId)
-        const sessions = await prisma.session.findMany({ where: { bigCourseId, id: { in: sessionsAttended } }, include: { subject: true } })
+        const sessions = await prisma.session.findMany({
+            where: {
+                bigCourseId: Number(bigCourseId),
+                id: { in: sessionsAttended },
+                ...subjectFilter
+            },
+            include: { subject: true }
+        })
         const SubjetcIdToSession = new Map<number, session[]>()
 
         for (const session of sessions) {

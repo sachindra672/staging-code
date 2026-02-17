@@ -18,8 +18,6 @@ model endUsers {
   grade                     String?
   password                  String?                     @db.VarChar(255)
   isVerified                Boolean?                    @default(false)
-  isSisyaEmp                Boolean?                    @default(false)
-  isBanned                  Boolean                     @default(false)
   createdOn                 DateTime?                   @default(now())
   modefiedOn                DateTime?                   @default(now())
   image                     String?
@@ -34,7 +32,12 @@ model endUsers {
   apnToken                  String?
   deviceType                DeviceType?                 @default(ANDROID)
   isDoubtPackageFromLP      Boolean                     @default(false)
+  isSisyaEmp                Boolean?                    @default(false)
+  isBanned                  Boolean                     @default(false)
   aiRatings                 AIRating[]
+  announcements             Announcement[]
+  announcementReads         AnnouncementRead[]
+  banRecords                BanRecord[]                 @relation("UserBans")
   Bgreview                  Bgreview[]
   GroupMember               GroupMember[]
   OpenSessionAttendance     OpenSessionAttendance[]
@@ -42,17 +45,22 @@ model endUsers {
   OpenSessionFeedback       OpenSessionFeedback[]
   OpenSessionQuizResponse   OpenSessionQuizResponse[]
   preSessionReminders       PreSessionReminder[]
+  recordingWatchProgress    RecordingWatchProgress[]
   responses                 Response[]
   sessionFeedbacks          SessionFeedback[]
   StudentAttendanceInterval StudentAttendanceInterval[]
   attendanceRecord          attendanceRecord[]
+  BlogLike                  BlogLike[]
   cTestResponse             cTestResponse[]
+  Comment                   Comment[]
   courseRating              courseRatings[]
   courses                   courses[]
   ctestSubmission           ctestSubmission[]
   doubt                     doubt[]
   doubtPackagePurchases     doubtPackagePurchases[]
   doubtRecord               doubtRecord[]
+  doubtReviews              doubtReview[]
+  slotBookings              doubtSlotBooking[]          @relation("studentSlotBookings")
   nboard                    EducationBoard?             @relation(fields: [educationBoardId], references: [id])
   parent                    parent?                     @relation(fields: [parentId], references: [id])
   mcqResponses              mcqResponses[]
@@ -63,46 +71,40 @@ model endUsers {
   qtestSubmission           qtestSubmission[]
   sessionTestResponse       sessionTestResponse[]
   sessionTestSubmission     sessionTestSubmission[]
+  sisyaClassQuizResponses   sisyaClassQuizResponse[]
   submission                submission[]
   subscription              subscription[]
-  Comment                   Comment[]
-  BlogLike                  BlogLike[]
-  sisyaClassQuizResponses   sisyaClassQuizResponse[]
-  recordingWatchProgress    RecordingWatchProgress[]
-  slotBookings              doubtSlotBooking[]          @relation("studentSlotBookings")
-  doubtReviews              doubtReview[]
-  announcements             Announcement[]
-  announcementReads         AnnouncementRead[]
-  banRecords                BanRecord[]                 @relation("UserBans")
 }
 
 model mentor {
-  id             Int      @id @default(autoincrement())
-  uuid           String   @default(uuid())
-  name           String   @db.VarChar(255)
-  email          String   @db.VarChar(255)
-  address        String   @db.VarChar(255)
-  searchTags     String   @db.VarChar(255)
-  languages      String   @db.VarChar(255)
-  passHash       String   @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
-  about          String   @default("this is some random about value to prevent null error ")
-  Grades         String[] @default(["1", "2", "3", "4", "5", "6"])
-  studentCount   BigInt
-  doubtsSolved   BigInt
-  averageRating  Float
-  dateOfBirth    DateTime
-  isActive       Boolean  @default(true)
-  createdOn      DateTime @default(now())
-  modefiedOn     DateTime @default(now())
-  phone          String   @db.VarChar(13)
-  subjectId      Int?
-  deviceId       String   @default("")
-  mobileDeviceId String   @default("")
-
-  isDoubtSpecialist       Boolean                   @default(false)
+  id                      Int                       @id @default(autoincrement())
+  uuid                    String                    @default(uuid())
+  name                    String                    @db.VarChar(255)
+  email                   String                    @db.VarChar(255)
+  address                 String                    @db.VarChar(255)
+  searchTags              String                    @db.VarChar(255)
+  languages               String                    @db.VarChar(255)
+  passHash                String                    @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  about                   String                    @default("this is some random about value to prevent null error ")
+  Grades                  String[]                  @default(["1", "2", "3", "4", "5", "6"])
+  studentCount            BigInt
+  doubtsSolved            BigInt
+  averageRating           Float
+  dateOfBirth             DateTime
+  isActive                Boolean                   @default(true)
+  createdOn               DateTime                  @default(now())
+  modefiedOn              DateTime                  @default(now())
+  phone                   String                    @db.VarChar(13)
+  subjectId               Int?
+  deviceId                String                    @default("")
   isAvailableForDoubts    Boolean                   @default(true)
+  isDoubtSpecialist       Boolean                   @default(false)
+  mobileDeviceId          String                    @default("")
+  announcements           Announcement[]
+  announcementReads       AnnouncementRead[]
   ApproverAssignment      ApproverAssignment[]
   AuditLog                AuditLog[]
+  issuedBans              BanRecord[]               @relation("BannedByMentor")
   approvedContents        Content[]                 @relation("ContentApprover")
   uploadedContents        Content[]                 @relation("UploadedByMentor")
   contentAccess           ContentAccess[]           @relation("ContentAccessMentor")
@@ -119,6 +121,10 @@ model mentor {
   ctest                   ctest[]
   doubt                   doubt[]
   doubtResponse           doubtResponse[]
+  doubtReviews            doubtReview[]
+  doubtSlots              doubtSlot[]               @relation("mentorDoubtSlots")
+  slotBookings            doubtSlotBooking[]        @relation("mentorSlotBookings")
+  slotInstances           doubtSlotInstance[]       @relation("mentorSlotInstances")
   leaves                  leaves[]
   ltCourses               ltCourses[]
   mcqTest                 mcqTest[]
@@ -129,13 +135,6 @@ model mentor {
   session                 session[]
   subjectRecord           subjectRecord[]
   teacherAttendanceRecord teacherAttendanceRecord[]
-  doubtSlots              doubtSlot[]               @relation("mentorDoubtSlots")
-  slotBookings            doubtSlotBooking[]        @relation("mentorSlotBookings")
-  slotInstances           doubtSlotInstance[]       @relation("mentorSlotInstances")
-  doubtReviews            doubtReview[]
-  announcements           Announcement[]
-  announcementReads       AnnouncementRead[]
-  issuedBans              BanRecord[]               @relation("BannedByMentor")
 }
 
 model testmodelNewMigration {
@@ -310,24 +309,22 @@ model doubt {
   assignee       mentor?           @relation(fields: [mentorId], references: [id])
   asker          endUsers          @relation(fields: [userId], references: [id])
   doubtResponse  doubtResponse[]
-  subjectRecord  subjectRecord[]
   doubtReview    doubtReview[]
   slotBooking    doubtSlotBooking?
+  subjectRecord  subjectRecord[]
 }
 
 model doubtReview {
   id        Int      @id @default(autoincrement())
-  rating    Int // 1 to 5
+  rating    Int
   comment   String?
   createdOn DateTime @default(now())
-
-  doubtId  Int
-  userId   Int
-  mentorId Int
-
-  doubt  doubt    @relation(fields: [doubtId], references: [id])
-  user   endUsers @relation(fields: [userId], references: [id])
-  mentor mentor   @relation(fields: [mentorId], references: [id])
+  doubtId   Int
+  userId    Int
+  mentorId  Int
+  doubt     doubt    @relation(fields: [doubtId], references: [id])
+  mentor    mentor   @relation(fields: [mentorId], references: [id])
+  user      endUsers @relation(fields: [userId], references: [id])
 
   @@unique([doubtId, userId])
 }
@@ -344,43 +341,40 @@ model doubtResponse {
 }
 
 model doubtSlot {
-  id              Int      @id @default(autoincrement())
+  id              Int                 @id @default(autoincrement())
   mentorId        Int
-  dayOfWeek       String   @db.VarChar(20)
+  dayOfWeek       String              @db.VarChar(20)
   startTime       DateTime
   endTime         DateTime
-  maxCapacity     Int      @default(1)
-  currentBookings Int      @default(0)
-  isAvailable     Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  createdOn       DateTime @default(now())
-  modifiedOn      DateTime @default(now())
-
-  slotInstances doubtSlotInstance[]
-
-  mentor       mentor             @relation("mentorDoubtSlots", fields: [mentorId], references: [id])
-  bookedDoubts doubtSlotBooking[]
+  maxCapacity     Int                 @default(1)
+  currentBookings Int                 @default(0)
+  isAvailable     Boolean             @default(true)
+  createdOn       DateTime            @default(now())
+  modifiedOn      DateTime            @default(now())
+  isActive        Boolean             @default(true)
+  mentor          mentor              @relation("mentorDoubtSlots", fields: [mentorId], references: [id])
+  bookedDoubts    doubtSlotBooking[]
+  slotInstances   doubtSlotInstance[]
 
   @@index([mentorId])
   @@index([isAvailable])
 }
 
 model doubtSlotInstance {
-  id              Int      @id @default(autoincrement())
-  slotId          Int // Reference to parent recurring slot
+  id              Int                @id @default(autoincrement())
+  slotId          Int
   mentorId        Int
-  startTime       DateTime // Specific date/time for this instance
-  endTime         DateTime // Specific date/time for this instance
-  maxCapacity     Int      @default(1)
-  currentBookings Int      @default(0)
-  isAvailable     Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  createdOn       DateTime @default(now())
-  modifiedOn      DateTime @default(now())
-
-  slot         doubtSlot          @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  mentor       mentor             @relation("mentorSlotInstances", fields: [mentorId], references: [id])
-  bookedDoubts doubtSlotBooking[] @relation("instanceBookings")
+  startTime       DateTime
+  endTime         DateTime
+  maxCapacity     Int                @default(1)
+  currentBookings Int                @default(0)
+  isAvailable     Boolean            @default(true)
+  createdOn       DateTime           @default(now())
+  modifiedOn      DateTime           @default(now())
+  isActive        Boolean            @default(true)
+  bookedDoubts    doubtSlotBooking[] @relation("instanceBookings")
+  mentor          mentor             @relation("mentorSlotInstances", fields: [mentorId], references: [id])
+  slot            doubtSlot          @relation(fields: [slotId], references: [id], onDelete: Cascade)
 
   @@index([slotId])
   @@index([mentorId])
@@ -389,24 +383,22 @@ model doubtSlotInstance {
 }
 
 model doubtSlotBooking {
-  id          Int       @id @default(autoincrement())
-  slotId      Int? // For backward compatibility (one-time slots)
-  instanceId  Int? // For recurring slot instances
-  doubtId     Int
+  id          Int                @id @default(autoincrement())
+  slotId      Int?
+  doubtId     Int                @unique
   mentorId    Int
   studentId   Int
-  status      String    @default("scheduled") // scheduled, completed, cancelled
+  status      String             @default("scheduled")
   completedOn DateTime?
-  createdOn   DateTime  @default(now())
-  modifiedOn  DateTime  @default(now())
+  createdOn   DateTime           @default(now())
+  modifiedOn  DateTime           @default(now())
+  instanceId  Int?
+  doubt       doubt              @relation(fields: [doubtId], references: [id], onDelete: Cascade)
+  instance    doubtSlotInstance? @relation("instanceBookings", fields: [instanceId], references: [id], onDelete: Cascade)
+  mentor      mentor             @relation("mentorSlotBookings", fields: [mentorId], references: [id])
+  slot        doubtSlot?         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  student     endUsers           @relation("studentSlotBookings", fields: [studentId], references: [id])
 
-  slot     doubtSlot?         @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  instance doubtSlotInstance? @relation("instanceBookings", fields: [instanceId], references: [id], onDelete: Cascade)
-  doubt    doubt              @relation(fields: [doubtId], references: [id], onDelete: Cascade)
-  mentor   mentor             @relation("mentorSlotBookings", fields: [mentorId], references: [id])
-  student  endUsers           @relation("studentSlotBookings", fields: [studentId], references: [id])
-
-  @@unique([doubtId])
   @@index([slotId])
   @@index([doubtId])
   @@index([mentorId])
@@ -444,10 +436,10 @@ model admin {
   email                String                 @db.VarChar(255)
   deviceId             String                 @default("")
   AuditLog             AuditLog[]
-  ContentAccessRequest ContentAccessRequest[]
-  GroupMember          GroupMember[]
   issuedBans           BanRecord[]            @relation("BannedByAdmin")
   resolvedBans         BanRecord[]            @relation("UnbannedByAdmin")
+  ContentAccessRequest ContentAccessRequest[]
+  GroupMember          GroupMember[]
 }
 
 model offer {
@@ -629,6 +621,7 @@ model Subject {
   updatedAt        DateTime        @updatedAt
   subjectBundleId  Int?
   isActive         Boolean         @default(true)
+  ctestSections    CTestSection[]
   chapters         Chapter[]
   educationBoard   EducationBoard  @relation(fields: [educationBoardId], references: [id])
   subjectBundle    subjectBundle?  @relation(fields: [subjectBundleId], references: [id])
@@ -699,7 +692,12 @@ model BigCourse {
   subjectList      Int[]
   slug             String?
   partialPrice     Float?
+  isWebCreated     Boolean            @default(false)
+  announcements    Announcement[]
   Bgreview         Bgreview[]
+  bigCourseBundles BigCourseBundle[]
+  BigCourseWeb     BigCourseWeb?
+  courseMaterials  CourseMaterial[]
   groupChat        GroupChat?
   PtmSession       PtmSession[]
   TeachIntro       TeachIntro[]
@@ -710,32 +708,45 @@ model BigCourse {
   mgSubsciption    mgSubsciption[]
   qtest            qtest[]
   session          session[]
+}
 
-  // website related
-  isWebCreated  Boolean        @default(false)
-  BigCourseWeb  BigCourseWeb?
-  announcements Announcement[]
+model BigCourseBundle {
+  id              Int             @id @default(autoincrement())
+  name            String
+  bigCourseId     Int
+  subjectIds      Int[]
+  price           Float
+  currentPrice    Float
+  isActive        Boolean         @default(true)
+  createdOn       DateTime        @default(now())
+  modifiedOn      DateTime        @updatedAt
+  appId           Int?
+  course          BigCourse       @relation(fields: [bigCourseId], references: [id])
+  mgSubscriptions mgSubsciption[]
 }
 
 model mgSubsciption {
-  id            Int          @id @default(autoincrement())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  PurchasePrice Float
-  cgst          Float
-  sgst          Float
-  basePrice     Float
-  discount      Float
-  endUsersId    Int
-  bigCourseId   Int
-  OrderId       String?
-  isActive      Boolean      @default(true)
-  isPartialPaid Boolean      @default(false)
-  isFullPaid    Boolean      @default(true)
-  dueDate       DateTime?
-  course        BigCourse    @relation(fields: [bigCourseId], references: [id])
-  user          endUsers     @relation(fields: [endUsersId], references: [id])
-  doubtRecord   doubtRecord?
+  id                Int              @id @default(autoincrement())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  PurchasePrice     Float
+  cgst              Float
+  sgst              Float
+  basePrice         Float
+  discount          Float
+  endUsersId        Int
+  bigCourseId       Int
+  OrderId           String?
+  isActive          Boolean          @default(true)
+  isPartialPaid     Boolean          @default(false)
+  isFullPaid        Boolean          @default(true)
+  dueDate           DateTime?
+  bigCourseBundleId Int?
+  isFullCourse      Boolean          @default(true)
+  doubtRecord       doubtRecord?
+  bigCourseBundle   BigCourseBundle? @relation(fields: [bigCourseBundleId], references: [id])
+  course            BigCourse        @relation(fields: [bigCourseId], references: [id])
+  user              endUsers         @relation(fields: [endUsersId], references: [id])
 
   @@unique([endUsersId, bigCourseId])
 }
@@ -756,11 +767,12 @@ model session {
   tokenId                  String?
   hostRecordingUrl         String?
   screenRecordingUrl       String?
-  recordingUrl             String?
-  isNewRecording           Boolean?             @default(false)
-  vmIp                     String?
   screenRecordingTimeStamp Json?
   sessionStartTime         DateTime?
+  vmIp                     String?
+  recordingUrl             String?
+  isNewRecording           Boolean?             @default(false)
+  courseMaterials          CourseMaterial[]
   preSessionReminders      PreSessionReminder[]
   quiz                     Quiz?
   analytics                SessionAnalytics?    @relation("SessionToAnalytics")
@@ -889,44 +901,59 @@ model TeachIntro {
 model ctest {
   id              Int                  @id @default(autoincrement())
   title           String
-  Duration        Int
+  Duration        Int?
   startDate       DateTime
   endDate         DateTime
   bigCourseId     Int
-  subjectId       Int
+  subjectId       Int?
   mentorId        Int
-  mode            CTestMode            @default(MCQ)
-  totalMarks      Int?
   createdOn       DateTime             @default(now())
   modifiedOn      DateTime             @default(now())
+  mode            CTestMode            @default(MCQ)
+  totalMarks      Int?
+  sections        CTestSection[]
   cTestResponse   cTestResponse[]
   course          BigCourse            @relation(fields: [bigCourseId], references: [id])
   mentor          mentor               @relation(fields: [mentorId], references: [id])
-  subject         Subject              @relation(fields: [subjectId], references: [id])
-  ctestQuestions  ctestQuestions[]
+  subject         Subject?             @relation(fields: [subjectId], references: [id])
   imageQuestions  ctestImageQuestion[]
+  ctestQuestions  ctestQuestions[]
   ctestSubmission ctestSubmission[]
 }
 
+model CTestSection {
+  id             Int                  @id @default(autoincrement())
+  ctestId        Int
+  subjectId      Int
+  title          String?
+  duration       Int                  @default(0)
+  sortOrder      Int                  @default(0)
+  createdOn      DateTime             @default(now())
+  test           ctest                @relation(fields: [ctestId], references: [id])
+  subject        Subject              @relation(fields: [subjectId], references: [id])
+  imageQuestions ctestImageQuestion[]
+  mcqQuestions   ctestQuestions[]
+}
+
 model ctestQuestions {
-  id              Int     @id @default(autoincrement())
-  type            qtype   @default(multipleChoice)
-  question        String  @default("this is some question text")
-  option1         String?
-  option2         String?
-  option3         String?
-  option4         String?
-  correctResponse Int
-
-  isSubjective     Boolean? @default(false)
+  id               Int             @id @default(autoincrement())
+  type             qtype           @default(multipleChoice)
+  question         String          @default("this is some question text")
+  option1          String?
+  option2          String?
+  option3          String?
+  option4          String?
+  correctResponse  Int
+  ctestId          Int
+  createdOn        DateTime        @default(now())
+  modifiedOn       DateTime        @default(now())
+  allowAttachments Boolean?        @default(false)
+  isSubjective     Boolean?        @default(false)
   maxWords         Int?
-  allowAttachments Boolean? @default(false)
-
-  ctestId       Int
-  createdOn     DateTime        @default(now())
-  modifiedOn    DateTime        @default(now())
-  cTestResponse cTestResponse[]
-  test          ctest           @relation(fields: [ctestId], references: [id])
+  sectionId        Int?
+  cTestResponse    cTestResponse[]
+  test             ctest           @relation(fields: [ctestId], references: [id])
+  section          CTestSection?   @relation(fields: [sectionId], references: [id])
 }
 
 model ctestSubmission {
@@ -936,30 +963,30 @@ model ctestSubmission {
   endUsersId    Int
   createdOn     DateTime              @default(now())
   modifiedOn    DateTime              @default(now())
-  status        CTestSubmissionStatus @default(IN_PROGRESS)
-  submittedAt   DateTime?
+  awardedMarks  Int?
   gradedAt      DateTime?
   gradedBy      Int?
-  totalMarks    Int?
-  awardedMarks  Int?
   gradingNote   String?
+  status        CTestSubmissionStatus @default(IN_PROGRESS)
+  submittedAt   DateTime?
+  totalMarks    Int?
   cTestResponse cTestResponse[]
+  imageAnswers  ctestImageAnswer[]
   ctest         ctest                 @relation(fields: [ctestId], references: [id])
   user          endUsers              @relation(fields: [endUsersId], references: [id])
-  imageAnswers  ctestImageAnswer[]
 }
 
 model cTestResponse {
   id                Int             @id @default(autoincrement())
   createdOn         DateTime        @default(now())
   response          Int?
-  subjectiveAnswer  String?
-  attachments       String[]        @default([])
   endUsersId        Int
   ctestQuestionsId  Int
   ctestId           Int
   ctestSubmissionId Int
   modifiedOn        DateTime        @default(now())
+  attachments       String[]        @default([])
+  subjectiveAnswer  String?
   forTest           ctest           @relation(fields: [ctestId], references: [id])
   forQuestion       ctestQuestions  @relation(fields: [ctestQuestionsId], references: [id])
   submission        ctestSubmission @relation(fields: [ctestSubmissionId], references: [id])
@@ -977,8 +1004,10 @@ model ctestImageQuestion {
   sortOrder       Int                @default(0)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
-  test            ctest              @relation(fields: [ctestId], references: [id])
+  sectionId       Int?
   answers         ctestImageAnswer[]
+  test            ctest              @relation(fields: [ctestId], references: [id])
+  section         CTestSection?      @relation(fields: [sectionId], references: [id])
 }
 
 model ctestImageAnswer {
@@ -993,8 +1022,8 @@ model ctestImageAnswer {
   reviewComment String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
-  submission    ctestSubmission    @relation(fields: [submissionId], references: [id])
   question      ctestImageQuestion @relation(fields: [questionId], references: [id])
+  submission    ctestSubmission    @relation(fields: [submissionId], references: [id])
 
   @@unique([submissionId, questionId])
   @@index([submissionId])
@@ -1034,10 +1063,10 @@ model sessionStreamInfo {
   hostId     String?
   Token      String?
   StreamId   String?
-  vmIp       String?
   sessionId  Int
   createdOn  DateTime @default(now())
   modifiedOn DateTime @default(now())
+  vmIp       String?
   session    session  @relation(fields: [sessionId], references: [id])
 }
 
@@ -1178,15 +1207,14 @@ model assetRecords {
 model doubtRecord {
   id                     Int                     @id @default(autoincrement())
   doubtsAsked            Int                     @default(0)
-  doubtsRemaining        Int                     @default(5) // Purchased doubts only
+  doubtsRemaining        Int                     @default(5)
   endUsersId             Int
-  // Monthly benefit fields
-  linkedSubscriptionId   Int?                    @unique
-  monthlyDoubtAllowance  Int                     @default(15)
-  monthlyDoubtsRemaining Int                     @default(0) // Monthly benefit doubts (separate from purchased)
-  lastMonthlyResetDate   DateTime?
   enrollmentDate         DateTime?
   isMonthlyBenefitActive Boolean                 @default(false)
+  lastMonthlyResetDate   DateTime?
+  linkedSubscriptionId   Int?                    @unique
+  monthlyDoubtAllowance  Int                     @default(15)
+  monthlyDoubtsRemaining Int                     @default(0)
   doubtPackagePurchases  doubtPackagePurchases[]
   user                   endUsers                @relation(fields: [endUsersId], references: [id])
   linkedSubscription     mgSubsciption?          @relation(fields: [linkedSubscriptionId], references: [id])
@@ -1194,7 +1222,6 @@ model doubtRecord {
 
 model doubtPackage {
   id                    Int                     @id @default(autoincrement())
-  doubtPackageId        Int?                    @unique
   name                  String
   description           String?
   doubtCount            Int
@@ -1204,6 +1231,7 @@ model doubtPackage {
   sortOrder             Int                     @default(0)
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
+  doubtPackageId        Int?                    @unique
   doubtPackagePurchases doubtPackagePurchases[]
 }
 
@@ -1211,37 +1239,32 @@ model doubtPackagePurchases {
   id             Int           @id @default(autoincrement())
   endUsersId     Int?
   doubtRecordId  Int
-  doubtPackageId Int?
   orderID        String?
-  source         String?
   DoubtCount     Int
-  amountPaid     Decimal?      @db.Decimal(10, 2)
   createOn       DateTime      @default(now())
   updatedOn      DateTime      @default(now())
+  amountPaid     Decimal?      @db.Decimal(10, 2)
+  doubtPackageId Int?
+  source         String?
+  package        doubtPackage? @relation(fields: [doubtPackageId], references: [id])
   record         doubtRecord   @relation(fields: [doubtRecordId], references: [id])
   endUsers       endUsers?     @relation(fields: [endUsersId], references: [id])
-  package        doubtPackage? @relation(fields: [doubtPackageId], references: [id])
 }
 
 model doubtLead {
-  id Int @id @default(autoincrement())
-
-  name  String?
-  class String?
-  email String?
-  phone String
-
+  id             Int      @id @default(autoincrement())
+  name           String?
+  class          String?
+  email          String?
+  phone          String
   doubtPackageId Int?
-  status         String // INITIATED | SUCCESS | FAILED
-
-  times Int @default(1)
-
-  amount        Decimal? @db.Decimal(10, 2)
-  source        String?
-  failureReason String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status         String
+  times          Int      @default(1)
+  amount         Decimal? @db.Decimal(10, 2)
+  source         String?
+  failureReason  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model groupChatInfo {
@@ -1261,7 +1284,6 @@ model RegterationLeads {
   phone             String
   class             String
   createdOn         DateTime           @default(now())
-  merrittoId        String?
   orderId           String?
   status            String?
   utm_campaign      String?
@@ -1274,6 +1296,7 @@ model RegterationLeads {
   referredBy        String?
   alternatePhone    String?
   preffredLanguage  String?
+  merrittoId        String?
   leadQuizResponses LeadQuizResponse[]
 
   @@index([phone])
@@ -1513,10 +1536,10 @@ model AIRating {
   id             Int       @id @default(autoincrement())
   rating         Int
   review         String
-  conversationId Int?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   userId         Int?
+  conversationId Int?
   isVisible      Boolean   @default(true)
   user           endUsers? @relation(fields: [userId], references: [id])
 }
@@ -1635,13 +1658,13 @@ model OpenSession {
   description  String?
   startTime    DateTime
   endTime      DateTime?
-  randomNumber String?
   isActive     Boolean                 @default(true)
   isDone       Boolean                 @default(false)
   isGoingOn    Boolean                 @default(false)
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
   grade        String?
+  randomNumber String?
   mentor       mentor                  @relation(fields: [mentorId], references: [id])
   attendance   OpenSessionAttendance[]
   bookings     OpenSessionBooking[]
@@ -1707,6 +1730,730 @@ model OpenSessionFeedback {
   student       endUsers    @relation(fields: [studentId], references: [id])
 }
 
+model classCardWeb {
+  id            Int      @id @default(autoincrement())
+  educatorImage String
+  demoPrice     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+  class         Int
+}
+
+model FeatureShowcaseSection {
+  id                String                   @id @default(cuid())
+  headingTop        String
+  headingMain       String
+  headingMainStyled Json?
+  title             String
+  titleStyled       Json?
+  subtitle          String
+  background        String?
+  order             Int?
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  features          FeatureShowcaseFeature[]
+  images            FeatureShowcaseImage[]
+}
+
+model FeatureShowcaseFeature {
+  id          String                 @id @default(cuid())
+  sectionId   String
+  title       String
+  description String
+  order       Int?
+  section     FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
+}
+
+model FeatureShowcaseImage {
+  id        String                 @id @default(cuid())
+  sectionId String
+  url       String
+  alt       String?
+  position  String?
+  order     Int?
+  section   FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
+}
+
+model WebLinks {
+  id                 String @id @default(cuid())
+  laptopVideoLink    String
+  webBannerImageLink String
+}
+
+model TestimonialReel {
+  id    String @id @default(cuid())
+  url   String
+  order Int
+}
+
+model TestimonialCard {
+  id             String   @id @default(cuid())
+  name           String
+  role           String
+  grade          String?
+  profileImage   String?
+  content        String
+  studentName    String?
+  courseEnrolled String?
+  order          Int      @default(0)
+  isVisible      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model FacultyMemberWebCard {
+  id              String   @id @default(cuid())
+  name            String
+  designation     String
+  qualification   String?
+  experienceText  String?
+  experienceYears Int?
+  imageUrl        String?
+  order           Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BigCourseWeb {
+  id              Int          @id @default(autoincrement())
+  bigCourseId     Int          @unique
+  createdWeb      Boolean      @default(true)
+  courseDemoPrice Float?
+  webLabel        String?
+  courseVideoLink String?
+  promoteCourses  Int[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  bigCourse       BigCourse    @relation(fields: [bigCourseId], references: [id])
+  subjects        SubjectWeb[]
+}
+
+model SubjectWeb {
+  id             Int          @id @default(autoincrement())
+  bigCourseWebId Int
+  name           String
+  taglinePoints  String[]
+  subtitle       String?
+  chapters       ChapterWeb[]
+  bigCourseWeb   BigCourseWeb @relation(fields: [bigCourseWebId], references: [id])
+}
+
+model ChapterWeb {
+  id             Int        @id @default(autoincrement())
+  subjectWebId   Int
+  title          String
+  syllabusPoints String[]
+  chapterNumber  Int?
+  subjectWeb     SubjectWeb @relation(fields: [subjectWebId], references: [id])
+}
+
+model Blog {
+  id                     String     @id @default(cuid())
+  title                  String
+  banner                 String?
+  des                    String?    @db.VarChar(250)
+  content                Json?
+  authorName             String
+  authorProfile          String?
+  activityLikes          Int        @default(0)
+  activityComments       Int        @default(0)
+  activityReads          Int        @default(0)
+  activityParentComments Int        @default(0)
+  draft                  Boolean    @default(false)
+  publishedAt            DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  deleted                Boolean    @default(false)
+  deletedAt              DateTime?
+  publishStatus          String     @default("PUBLISHED")
+  scheduledAt            DateTime?
+  likedBy                BlogLike[]
+  tags                   BlogTag[]
+  comments               Comment[]
+
+  @@map("blogs")
+}
+
+model Comment {
+  id            String    @id @default(cuid())
+  blogId        String
+  comment       String
+  isReply       Boolean   @default(false)
+  parentId      String?
+  commentedById Int
+  commentedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  blog          Blog      @relation(fields: [blogId], references: [id])
+  commentedBy   endUsers  @relation(fields: [commentedById], references: [id])
+  parent        Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  children      Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  blogs BlogTag[]
+
+  @@map("tags")
+}
+
+model BlogTag {
+  id     String @id @default(cuid())
+  blogId String
+  tagId  String
+  blog   Blog   @relation(fields: [blogId], references: [id])
+  tag    Tag    @relation(fields: [tagId], references: [id])
+
+  @@unique([blogId, tagId])
+  @@map("blog_tags")
+}
+
+model BlogLike {
+  id      String   @id @default(cuid())
+  blogId  String
+  userId  Int
+  likedAt DateTime @default(now())
+  blog    Blog     @relation(fields: [blogId], references: [id])
+  user    endUsers @relation(fields: [userId], references: [id])
+
+  @@unique([blogId, userId])
+  @@map("blog_likes")
+}
+
+model News {
+  id            String    @id @default(cuid())
+  title         String
+  banner        String?
+  des           String?   @db.VarChar(250)
+  content       Json?
+  authorName    String
+  authorProfile String?
+  publishedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deleted       Boolean   @default(false)
+  deletedAt     DateTime?
+
+  @@map("news")
+}
+
+model SubAdmin {
+  id                   String   @id @default(cuid())
+  name                 String
+  email                String   @unique
+  password             String   @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
+  role                 String   @default("subadmin")
+  permissions          Json     @default("{}")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  isActive             Boolean  @default(true)
+  analyticsPermissions Json     @default("{}")
+}
+
+model GlobalMaterial {
+  id         String   @id @default(cuid())
+  className  String
+  type       String
+  fileName   String
+  fileUrl    String
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+  size       Int?
+  mimeType   String?
+
+  @@index([className])
+  @@index([type])
+}
+
+model WebBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  createdAt DateTime @default(now())
+  href      String?
+}
+
+model WebVideo {
+  id        String   @id @default(cuid())
+  videoLink String
+  createdAt DateTime @default(now())
+}
+
+model BlogAdBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  href      String?
+  createdAt DateTime @default(now())
+}
+
+model CoursePageBanner {
+  id        String   @id @default(cuid())
+  imageLink String
+  href      String?
+  createdAt DateTime @default(now())
+}
+
+model sipCraousel1 {
+  id        String   @id @default(cuid())
+  imageLink String
+  order     Int      @default(0)
+  href      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model sipCraousel2 {
+  id        String   @id @default(cuid())
+  imageLink String
+  order     Int      @default(0)
+  href      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SipAppointmentLead {
+  id             String   @id @default(cuid())
+  countryCode    String   @default("IN")
+  mobileNumber   String
+  name           String
+  role           String
+  institute      String?
+  location       String?
+  preferredBoard String
+  createdAt      DateTime @default(now())
+}
+
+model SipMentor {
+  id        String   @id @default(cuid())
+  name      String
+  institute String?
+  imageLink String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SisyaWallet {
+  id               String                @id @default(cuid())
+  ownerType        OwnerType
+  ownerId          Int
+  spendableBalance Decimal               @default(0)
+  rewardBudget     Decimal               @default(0)
+  lockedAmount     Decimal               @default(0)
+  totalEarned      Decimal               @default(0)
+  totalSpent       Decimal               @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  auditLogs        SisyaAuditLog[]
+  avatarPurchases  SisyaAvatarPurchase[]
+  expiryBalances   SisyaExpiryBalance[]
+  purchases        SisyaFiatPurchase[]
+  locks            SisyaLock[]
+  rewards          SisyaReward[]
+  rewardLimitUser  SisyaRewardLimitUser?
+  rewardUsage      SisyaRewardUsage[]
+  orders           SisyaStoreOrder[]
+  transactions     SisyaTransaction[]
+
+  @@unique([ownerType, ownerId])
+}
+
+model SisyaTransaction {
+  id                   String       @id @default(cuid())
+  walletId             String
+  type                 TxType
+  status               TxStatus     @default(COMPLETED)
+  amount               Decimal
+  fee                  Decimal      @default(0)
+  balanceBefore        Decimal
+  balanceAfter         Decimal
+  balanceType          BalanceType?
+  counterpartyWalletId String?
+  metadata             Json?
+  reference            String?      @unique
+  createdAt            DateTime     @default(now())
+  initiatedByType      OwnerType?
+  initiatedById        Int?
+  wallet               SisyaWallet  @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model SisyaLock {
+  id         String      @id @default(cuid())
+  walletId   String
+  amount     Decimal
+  remaining  Decimal
+  reason     String?
+  lockType   LockType
+  startsAt   DateTime
+  unlocksAt  DateTime
+  isReleased Boolean     @default(false)
+  releasedAt DateTime?
+  wallet     SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([unlocksAt])
+}
+
+model SisyaExpiryBalance {
+  id            String      @id @default(cuid())
+  walletId      String
+  amountTotal   Decimal
+  amountUsed    Decimal     @default(0)
+  amountExpired Decimal     @default(0)
+  expiresAt     DateTime
+  issuedAt      DateTime    @default(now())
+  reason        String?
+  isExpired     Boolean     @default(false)
+  expiredAt     DateTime?
+  wallet        SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([expiresAt])
+}
+
+model SisyaReward {
+  id          String      @id @default(cuid())
+  walletId    String
+  taskCode    String
+  coinsEarned Decimal
+  createdAt   DateTime    @default(now())
+  metadata    Json?
+  wallet      SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@unique([walletId, taskCode])
+}
+
+model SisyaAuditLog {
+  id        String      @id @default(cuid())
+  walletId  String
+  action    String
+  actorType OwnerType
+  actorId   Int
+  before    Decimal
+  delta     Decimal
+  after     Decimal
+  note      String?
+  createdAt DateTime    @default(now())
+  wallet    SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([createdAt])
+}
+
+model SisyaRate {
+  id            Int       @id @default(autoincrement())
+  baseCurrency  String
+  coinsPerUnit  Decimal
+  offerPercent  Int?
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@index([isActive])
+  @@index([baseCurrency])
+}
+
+model SisyaFiatPurchase {
+  id              String      @id @default(cuid())
+  walletId        String
+  ownerType       OwnerType
+  ownerId         Int
+  amountFiat      Decimal
+  currency        String
+  coinsIssued     Decimal
+  paymentProvider String?
+  providerRef     String?     @unique
+  signature       String?
+  status          TxStatus    @default(PENDING)
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  completedAt     DateTime?
+  wallet          SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model SisyaStoreItem {
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  imageUrl      String?
+  priceCoins    Decimal
+  originalCoins Decimal?
+  stock         Int                   @default(0)
+  isActive      Boolean               @default(true)
+  category      String?
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  orders        SisyaStoreOrderItem[]
+}
+
+model SisyaAvatar {
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  imageUrl      String?
+  priceCoins    Decimal
+  originalCoins Decimal?
+  isActive      Boolean               @default(true)
+  isLimited     Boolean               @default(false)
+  totalSupply   Int?
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  purchases     SisyaAvatarPurchase[]
+}
+
+model SisyaAvatarPurchase {
+  id          String      @id @default(cuid())
+  walletId    String
+  avatarId    String
+  pricePaid   Decimal
+  purchasedAt DateTime    @default(now())
+  metadata    Json?
+  avatar      SisyaAvatar @relation(fields: [avatarId], references: [id])
+  wallet      SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@unique([walletId, avatarId])
+  @@index([avatarId])
+}
+
+model SisyaStoreOrder {
+  id          String                @id @default(cuid())
+  walletId    String
+  ownerType   OwnerType
+  ownerId     Int
+  totalCoins  Decimal
+  status      StoreOrderStatus      @default(PENDING)
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+  completedAt DateTime?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+  address     Json?
+  wallet      SisyaWallet           @relation(fields: [walletId], references: [id])
+  items       SisyaStoreOrderItem[]
+}
+
+model SisyaStoreOrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  itemId          String
+  quantity        Int             @default(1)
+  priceAtPurchase Decimal
+  metadata        Json?
+  item            SisyaStoreItem  @relation(fields: [itemId], references: [id])
+  order           SisyaStoreOrder @relation(fields: [orderId], references: [id])
+}
+
+model SisyaRewardLimit {
+  id           String    @id @default(cuid())
+  role         OwnerType @unique
+  dailyLimit   Decimal
+  monthlyLimit Decimal?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model SisyaRewardLimitUser {
+  id           String      @id @default(cuid())
+  walletId     String      @unique
+  dailyLimit   Decimal
+  monthlyLimit Decimal?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  wallet       SisyaWallet @relation(fields: [walletId], references: [id])
+}
+
+model SisyaRewardUsage {
+  id             String      @id @default(cuid())
+  walletId       String
+  date           DateTime
+  amountRewarded Decimal     @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  wallet         SisyaWallet @relation(fields: [walletId], references: [id])
+
+  @@unique([walletId, date])
+}
+
+model sisyaClassQuiz {
+  id            Int                      @id @default(autoincrement())
+  sessionId     Int
+  quizId        String
+  title         String
+  type          String
+  question      String?
+  correctAnswer String
+  options       Json?
+  timerDuration Int
+  timerEndsAt   DateTime?
+  createdAt     DateTime                 @default(now())
+  endedAt       DateTime?
+  isActive      Boolean                  @default(false)
+  session       session                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  responses     sisyaClassQuizResponse[]
+
+  @@index([sessionId])
+  @@index([quizId])
+  @@map("sisya_class_quiz")
+}
+
+model sisyaClassQuizResponse {
+  id             Int            @id @default(autoincrement())
+  quizId         Int
+  userId         Int
+  selectedAnswer String
+  timeTaken      Int
+  isCorrect      Boolean
+  createdAt      DateTime       @default(now())
+  quiz           sisyaClassQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user           endUsers       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([userId])
+  @@index([quizId, userId])
+  @@map("sisya_class_quiz_response")
+}
+
+model RecordingWatchProgress {
+  id                   Int                     @id @default(autoincrement())
+  endUsersId           Int
+  contentType          String
+  contentId            String
+  totalDuration        Int                     @default(0)
+  hasPlayed            Boolean                 @default(false)
+  firstPlayedAt        DateTime?
+  totalUniqueWatchTime Int                     @default(0)
+  maxProgress          Int                     @default(0)
+  lastPlayedAt         DateTime?
+  completionPercentage Float                   @default(0)
+  isCompleted          Boolean                 @default(false)
+  completedAt          DateTime?
+  rewardGiven          Boolean                 @default(false)
+  rewardGivenAt        DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  user                 endUsers                @relation(fields: [endUsersId], references: [id])
+  segments             RecordingWatchSegment[]
+
+  @@unique([endUsersId, contentType, contentId])
+  @@index([endUsersId])
+  @@index([contentType, contentId])
+  @@index([isCompleted])
+  @@index([rewardGiven])
+}
+
+model RecordingWatchSegment {
+  id              Int                    @id @default(autoincrement())
+  watchProgressId Int
+  startTime       Int
+  endTime         Int
+  watchedAt       DateTime               @default(now())
+  duration        Int
+  watchProgress   RecordingWatchProgress @relation(fields: [watchProgressId], references: [id], onDelete: Cascade)
+
+  @@index([watchProgressId])
+  @@index([watchedAt])
+}
+
+model Announcement {
+  id           String              @id @default(cuid())
+  title        String
+  message      String
+  type         AnnouncmentType     @default(GENERAL)
+  status       AnnouncmentStatus   @default(DRAFT)
+  audience     AnnouncmentAudience @default(ALL_USERS)
+  scope        AnnouncmentScope    @default(GLOBAL)
+  courseId     Int?
+  classId      Int?
+  userId       Int?
+  scheduledAt  DateTime?
+  sentAt       DateTime?
+  sendPush     Boolean             @default(true)
+  sendEmail    Boolean             @default(false)
+  sendWhatsapp Boolean             @default(false)
+  sendSMS      Boolean             @default(false)
+  sendInApp    Boolean             @default(true)
+  totalSent    Int                 @default(0)
+  totalRead    Int                 @default(0)
+  source       AnnouncmentSource   @default(ADMIN)
+  createdBy    Int?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  isDeleted    Boolean             @default(false)
+  actionData   Json?
+  actionTarget String?
+  actionType   String?
+  imageUrl     String?
+  thumbnailUrl String?
+  mentorId     Int?
+  course       BigCourse?          @relation(fields: [courseId], references: [id])
+  mentor       mentor?             @relation(fields: [mentorId], references: [id])
+  user         endUsers?           @relation(fields: [userId], references: [id])
+  reads        AnnouncementRead[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([audience, scope])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         Int?
+  readAt         DateTime     @default(now())
+  mentorId       Int?
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  mentor         mentor?      @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  user           endUsers?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@unique([announcementId, mentorId])
+  @@index([userId])
+  @@index([mentorId])
+}
+
+model BanRecord {
+  id                Int       @id @default(autoincrement())
+  studentId         Int
+  bannedByMentorId  Int?
+  bannedByAdminId   Int?
+  unbannedByAdminId Int?
+  reason            String
+  bannedAt          DateTime  @default(now())
+  unbannedAt        DateTime?
+  bannedByAdmin     admin?    @relation("BannedByAdmin", fields: [bannedByAdminId], references: [id])
+  bannedByMentor    mentor?   @relation("BannedByMentor", fields: [bannedByMentorId], references: [id])
+  student           endUsers  @relation("UserBans", fields: [studentId], references: [id])
+  unbannedByAdmin   admin?    @relation("UnbannedByAdmin", fields: [unbannedByAdminId], references: [id])
+}
+
+model CourseMaterial {
+  id          Int            @id @default(autoincrement())
+  fileName    String
+  fileUrl     String
+  bigCourseId Int
+  sessionId   Int?
+  storageType String         @default("GCS")
+  source      MaterialSource @default(NEW)
+  createdOn   DateTime       @default(now())
+  bigCourse   BigCourse      @relation(fields: [bigCourseId], references: [id])
+  session     session?       @relation(fields: [sessionId], references: [id])
+
+  @@index([bigCourseId])
+  @@index([sessionId])
+}
+
 enum qtype {
   multipleChoice
   trueFalse
@@ -1716,6 +2463,7 @@ enum qtype {
 enum CTestMode {
   MCQ
   IMAGE
+  COMBINED
 }
 
 enum CTestSubmissionStatus {
@@ -1780,375 +2528,26 @@ enum DeviceType {
   IOS
 }
 
-// website contents below
-model classCardWeb {
-  id            Int      @id @default(autoincrement())
-  class         Int
-  educatorImage String
-  demoPrice     Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now())
-}
-
-model FeatureShowcaseSection {
-  id                String                   @id @default(cuid())
-  headingTop        String
-  headingMain       String
-  headingMainStyled Json?
-  title             String
-  titleStyled       Json?
-  subtitle          String
-  background        String?
-  order             Int?
-  features          FeatureShowcaseFeature[]
-  images            FeatureShowcaseImage[]
-  isActive          Boolean                  @default(true)
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-}
-
-model FeatureShowcaseFeature {
-  id          String                 @id @default(cuid())
-  sectionId   String
-  section     FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
-  title       String
-  description String
-  order       Int?
-}
-
-model FeatureShowcaseImage {
-  id        String                 @id @default(cuid())
-  sectionId String
-  section   FeatureShowcaseSection @relation(fields: [sectionId], references: [id])
-  url       String
-  alt       String?
-  position  String?
-  order     Int?
-}
-
-model WebLinks {
-  id                 String @id @default(cuid())
-  laptopVideoLink    String
-  webBannerImageLink String
-}
-
-model TestimonialReel {
-  id    String @id @default(cuid())
-  url   String
-  order Int
-}
-
-model TestimonialCard {
-  id             String   @id @default(cuid())
-  name           String
-  role           String
-  grade          String?
-  profileImage   String?
-  content        String
-  studentName    String?
-  courseEnrolled String?
-  order          Int      @default(0)
-  isVisible      Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
-model FacultyMemberWebCard {
-  id              String   @id @default(cuid())
-  name            String
-  designation     String
-  qualification   String?
-  experienceText  String?
-  experienceYears Int?
-  imageUrl        String?
-  order           Int?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-model BigCourseWeb {
-  id              Int          @id @default(autoincrement())
-  bigCourseId     Int          @unique
-  bigCourse       BigCourse    @relation(fields: [bigCourseId], references: [id])
-  createdWeb      Boolean      @default(true)
-  courseDemoPrice Float?
-  webLabel        String?
-  courseVideoLink String?
-  promoteCourses  Int[]
-  subjects        SubjectWeb[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-}
-
-model SubjectWeb {
-  id             Int          @id @default(autoincrement())
-  bigCourseWebId Int
-  bigCourseWeb   BigCourseWeb @relation(fields: [bigCourseWebId], references: [id])
-  name           String
-  subtitle       String?
-  taglinePoints  String[]
-  chapters       ChapterWeb[]
-}
-
-model ChapterWeb {
-  id             Int        @id @default(autoincrement())
-  subjectWebId   Int
-  subjectWeb     SubjectWeb @relation(fields: [subjectWebId], references: [id])
-  title          String
-  chapterNumber  Int?
-  syllabusPoints String[]
-}
-
-model Blog {
-  id            String    @id @default(cuid())
-  title         String
-  banner        String?
-  des           String?   @db.VarChar(250)
-  content       Json?
-  authorName    String
-  authorProfile String?
-  deleted       Boolean   @default(false)
-  deletedAt     DateTime?
-
-  activityLikes          Int @default(0)
-  activityComments       Int @default(0)
-  activityReads          Int @default(0)
-  activityParentComments Int @default(0)
-
-  draft         Boolean   @default(false)
-  publishStatus String    @default("PUBLISHED")
-  scheduledAt   DateTime?
-  publishedAt   DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  comments Comment[]
-  tags     BlogTag[]
-  likedBy  BlogLike[]
-
-  @@map("blogs")
-}
-
-model Comment {
-  id     String @id @default(cuid())
-  blogId String
-  blog   Blog   @relation(fields: [blogId], references: [id])
-
-  comment  String
-  isReply  Boolean   @default(false)
-  parentId String?
-  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
-  children Comment[] @relation("CommentReplies")
-
-  commentedById Int
-  commentedBy   endUsers @relation(fields: [commentedById], references: [id])
-
-  commentedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("comments")
-}
-
-model Tag {
-  id    String    @id @default(cuid())
-  name  String    @unique
-  blogs BlogTag[]
-
-  @@map("tags")
-}
-
-model BlogTag {
-  id     String @id @default(cuid())
-  blogId String
-  tagId  String
-
-  blog Blog @relation(fields: [blogId], references: [id])
-  tag  Tag  @relation(fields: [tagId], references: [id])
-
-  @@unique([blogId, tagId])
-  @@map("blog_tags")
-}
-
-model BlogLike {
-  id      String   @id @default(cuid())
-  blogId  String
-  userId  Int
-  likedAt DateTime @default(now())
-
-  blog Blog     @relation(fields: [blogId], references: [id])
-  user endUsers @relation(fields: [userId], references: [id])
-
-  @@unique([blogId, userId])
-  @@map("blog_likes")
-}
-
-model News {
-  id            String    @id @default(cuid())
-  title         String
-  banner        String?
-  des           String?   @db.VarChar(250)
-  content       Json?
-  authorName    String
-  authorProfile String?
-  publishedAt   DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deleted       Boolean   @default(false)
-  deletedAt     DateTime?
-
-  @@map("news")
-}
-
-model SubAdmin {
-  id                   String  @id @default(cuid())
-  name                 String
-  email                String  @unique
-  password             String  @default("$argon2id$v=19$m=16,t=2,p=1$REduaEZXVVJVT3JsaExXdw$JS29/SYbeBmHj8P0mjvEvQ")
-  role                 String  @default("subadmin")
-  permissions          Json    @default("{}")
-  analyticsPermissions Json    @default("{}")
-  isActive             Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model GlobalMaterial {
-  id         String   @id @default(cuid())
-  className  String
-  type       String
-  fileName   String
-  fileUrl    String
-  uploadedBy String?
-  uploadedAt DateTime @default(now())
-  size       Int?
-  mimeType   String?
-
-  @@index([className])
-  @@index([type])
-}
-
-model WebBanner {
-  id        String   @id @default(cuid())
-  imageLink String
-  href      String?
-  createdAt DateTime @default(now())
-}
-
-model WebVideo {
-  id        String   @id @default(cuid())
-  videoLink String
-  createdAt DateTime @default(now())
-}
-
-model BlogAdBanner {
-  id        String   @id @default(cuid())
-  imageLink String
-  href      String?
-  createdAt DateTime @default(now())
-}
-
-model CoursePageBanner {
-  id        String   @id @default(cuid())
-  imageLink String
-  href      String?
-  createdAt DateTime @default(now())
-}
-
-model sipCraousel1 {
-  id        String   @id @default(cuid())
-  imageLink String
-  order     Int      @default(0)
-  href      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model sipCraousel2 {
-  id        String   @id @default(cuid())
-  imageLink String
-  order     Int      @default(0)
-  href      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model SipAppointmentLead {
-  id             String   @id @default(cuid())
-  countryCode    String   @default("IN")
-  mobileNumber   String
-  name           String
-  role           String
-  institute      String?
-  location       String?
-  preferredBoard String
-  createdAt      DateTime @default(now())
-}
-
-model SipMentor {
-  id        String   @id @default(cuid())
-  name      String
-  institute String?
-  imageLink String?
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// sisya coin things below
 enum OwnerType {
   ENDUSER
   MENTOR
   SALESMAN
   ADMIN
   SUBADMIN
-  SYSTEM // TODO- run script, first baar for creating system wallet
-}
-
-// already created user wallet creation scripts
-
-model SisyaWallet {
-  id        String    @id @default(cuid())
-  ownerType OwnerType
-  ownerId   Int
-
-  spendableBalance Decimal @default("0")
-  rewardBudget     Decimal @default("0")
-
-  lockedAmount Decimal @default("0")
-  totalEarned  Decimal @default("0")
-  totalSpent   Decimal @default("0")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  transactions    SisyaTransaction[]
-  locks           SisyaLock[]
-  auditLogs       SisyaAuditLog[]
-  rewards         SisyaReward[]
-  purchases       SisyaFiatPurchase[]
-  orders          SisyaStoreOrder[]
-  rewardUsage     SisyaRewardUsage[]
-  rewardLimitUser SisyaRewardLimitUser?
-  expiryBalances  SisyaExpiryBalance[] // TODO:- spend mai pahle expiry balance use karna h then use normal
-  avatarPurchases SisyaAvatarPurchase[]
-
-  @@unique([ownerType, ownerId])
+  SYSTEM
 }
 
 enum TxType {
   TASK_REWARD
   MANUAL_REWARD
   MANUAL_REWARD_BUDGET
-
   TRANSFER
   DEDUCT
   BONUS
-
   PURCHASE
   PURCHASE_REFUND
-
   PURCHASE_ITEM
   PURCHASE_ITEM_REFUND
-
   MINT
   BURN
   EXPIRE
@@ -2165,218 +2564,10 @@ enum BalanceType {
   REWARD_BUDGET
 }
 
-model SisyaTransaction {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  type   TxType
-  status TxStatus @default(COMPLETED)
-
-  amount Decimal
-  fee    Decimal @default("0")
-
-  balanceBefore Decimal
-  balanceAfter  Decimal
-
-  balanceType          BalanceType?
-  counterpartyWalletId String?
-  metadata             Json?
-  reference            String?      @unique
-  createdAt            DateTime     @default(now())
-
-  initiatedByType OwnerType?
-  initiatedById   Int?
-
-  @@index([walletId])
-  @@index([type])
-  @@index([createdAt])
-}
-
 enum LockType {
   VEST
   PROMO
   STAKE
-}
-
-model SisyaLock {
-  id       String      @id @default(cuid())
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  amount    Decimal
-  remaining Decimal
-
-  reason   String?
-  lockType LockType
-
-  startsAt  DateTime
-  unlocksAt DateTime
-
-  isReleased Boolean   @default(false)
-  releasedAt DateTime?
-
-  @@index([walletId])
-  @@index([unlocksAt])
-}
-
-model SisyaExpiryBalance {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  amountTotal   Decimal // total coins given in this batch
-  amountUsed    Decimal @default("0")
-  amountExpired Decimal @default("0")
-
-  expiresAt DateTime
-  issuedAt  DateTime @default(now())
-  reason    String?
-
-  isExpired Boolean   @default(false)
-  expiredAt DateTime?
-
-  @@index([walletId])
-  @@index([expiresAt])
-}
-
-model SisyaReward {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  taskCode    String
-  coinsEarned Decimal
-  createdAt   DateTime @default(now())
-
-  metadata Json?
-
-  @@unique([walletId, taskCode])
-}
-
-model SisyaAuditLog {
-  id       String      @id @default(cuid())
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  action    String
-  actorType OwnerType
-  actorId   Int
-
-  before Decimal
-  delta  Decimal
-  after  Decimal
-
-  note      String?
-  createdAt DateTime @default(now())
-
-  @@index([walletId])
-  @@index([createdAt])
-}
-
-model SisyaRate {
-  id Int @id @default(autoincrement())
-
-  baseCurrency String
-  coinsPerUnit Decimal
-  offerPercent Int?
-
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
-  isActive      Boolean   @default(true)
-
-  createdAt DateTime @default(now())
-
-  @@index([isActive])
-  @@index([baseCurrency])
-}
-
-model SisyaFiatPurchase {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  ownerType OwnerType
-  ownerId   Int
-
-  amountFiat  Decimal
-  currency    String
-  coinsIssued Decimal
-
-  paymentProvider String?
-  providerRef     String? @unique
-  signature       String?
-
-  status   TxStatus @default(PENDING)
-  metadata Json?
-
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
-
-  @@index([ownerId])
-  @@index([status])
-}
-
-model SisyaStoreItem {
-  id String @id @default(cuid())
-
-  name        String
-  description String?
-  imageUrl    String?
-
-  priceCoins    Decimal
-  originalCoins Decimal?
-  stock         Int      @default(0)
-  isActive      Boolean  @default(true)
-  category      String?
-  metadata      Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  orders SisyaStoreOrderItem[]
-}
-
-model SisyaAvatar {
-  id String @id @default(cuid())
-
-  name        String
-  description String?
-  imageUrl    String?
-
-  priceCoins    Decimal
-  originalCoins Decimal?
-
-  isActive    Boolean @default(true)
-  isLimited   Boolean @default(false)
-  totalSupply Int?
-  metadata    Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  purchases SisyaAvatarPurchase[]
-}
-
-model SisyaAvatarPurchase {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  avatarId String
-  avatar   SisyaAvatar @relation(fields: [avatarId], references: [id])
-
-  pricePaid   Decimal
-  purchasedAt DateTime @default(now())
-  metadata    Json?
-
-  @@unique([walletId, avatarId])
-  @@index([avatarId])
 }
 
 enum StoreOrderStatus {
@@ -2386,188 +2577,6 @@ enum StoreOrderStatus {
   CANCELLED
 }
 
-model SisyaStoreOrder {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  ownerType  OwnerType
-  ownerId    Int
-  totalCoins Decimal
-
-  status StoreOrderStatus @default(PENDING)
-
-  address     Json?
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
-  cancelledAt DateTime?
-  refundedAt  DateTime?
-
-  items SisyaStoreOrderItem[]
-}
-
-model SisyaStoreOrderItem {
-  id String @id @default(cuid())
-
-  orderId String
-  order   SisyaStoreOrder @relation(fields: [orderId], references: [id])
-
-  itemId String
-  item   SisyaStoreItem @relation(fields: [itemId], references: [id])
-
-  quantity        Int     @default(1)
-  priceAtPurchase Decimal
-  metadata        Json?
-}
-
-model SisyaRewardLimit {
-  id   String    @id @default(cuid())
-  role OwnerType
-
-  dailyLimit   Decimal
-  monthlyLimit Decimal?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([role])
-}
-
-model SisyaRewardLimitUser {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  dailyLimit   Decimal
-  monthlyLimit Decimal?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([walletId])
-}
-
-model SisyaRewardUsage {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   SisyaWallet @relation(fields: [walletId], references: [id])
-
-  date           DateTime
-  amountRewarded Decimal  @default("0")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([walletId, date])
-}
-
-//quiz 
-model sisyaClassQuiz {
-  id            Int       @id @default(autoincrement())
-  sessionId     Int
-  quizId        String
-  title         String
-  type          String
-  question      String?
-  correctAnswer String
-  options       Json?
-  timerDuration Int
-  timerEndsAt   DateTime?
-  createdAt     DateTime  @default(now())
-  endedAt       DateTime?
-  isActive      Boolean   @default(false)
-
-  session   session                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  responses sisyaClassQuizResponse[]
-
-  @@index([sessionId])
-  @@index([quizId])
-  @@map("sisya_class_quiz")
-}
-
-model sisyaClassQuizResponse {
-  id             Int      @id @default(autoincrement())
-  quizId         Int
-  userId         Int
-  selectedAnswer String
-  timeTaken      Int
-  isCorrect      Boolean
-  createdAt      DateTime @default(now())
-
-  quiz sisyaClassQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  user endUsers       @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([quizId])
-  @@index([userId])
-  @@index([quizId, userId])
-  @@map("sisya_class_quiz_response")
-}
-
-model RecordingWatchProgress {
-  id Int @id @default(autoincrement())
-
-  endUsersId Int
-  user       endUsers @relation(fields: [endUsersId], references: [id])
-
-  contentType String
-  contentId   String
-
-  totalDuration Int @default(0)
-
-  hasPlayed     Boolean   @default(false)
-  firstPlayedAt DateTime?
-
-  totalUniqueWatchTime Int       @default(0)
-  maxProgress          Int       @default(0)
-  lastPlayedAt         DateTime?
-
-  // Completion tracking
-  completionPercentage Float     @default(0)
-  isCompleted          Boolean   @default(false)
-  completedAt          DateTime?
-
-  // Reward tracking
-  rewardGiven   Boolean   @default(false)
-  rewardGivenAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  segments RecordingWatchSegment[]
-
-  @@unique([endUsersId, contentType, contentId])
-  @@index([endUsersId])
-  @@index([contentType, contentId])
-  @@index([isCompleted])
-  @@index([rewardGiven])
-}
-
-model RecordingWatchSegment {
-  id Int @id @default(autoincrement())
-
-  watchProgressId Int
-  watchProgress   RecordingWatchProgress @relation(fields: [watchProgressId], references: [id], onDelete: Cascade)
-
-  startTime Int
-  endTime   Int
-
-  watchedAt DateTime @default(now())
-
-  duration Int // endTime - startTime
-
-  @@index([watchProgressId])
-  @@index([watchedAt])
-}
-
-//Announcment
 enum AnnouncmentType {
   GENERAL
   IMPORTANT
@@ -2601,99 +2610,7 @@ enum AnnouncmentSource {
   SYSTEM
 }
 
-model Announcement {
-  id String @id @default(cuid())
-
-  title   String
-  message String
-
-  type   AnnouncmentType   @default(GENERAL)
-  status AnnouncmentStatus @default(DRAFT)
-
-  // target
-  audience AnnouncmentAudience @default(ALL_USERS)
-  scope    AnnouncmentScope    @default(GLOBAL)
-
-  // target references
-  courseId Int?
-  classId  Int?
-  userId   Int?
-  mentorId Int?
-
-  // SCHEDULING
-  scheduledAt DateTime?
-  sentAt      DateTime?
-
-  // DELIVERY CHANNELS
-  sendPush     Boolean @default(true)
-  sendEmail    Boolean @default(false)
-  sendWhatsapp Boolean @default(false)
-  sendSMS      Boolean @default(false)
-  sendInApp    Boolean @default(true)
-
-  // for analytics purpose
-  totalSent Int @default(0)
-  totalRead Int @default(0)
-
-  // Image support
-  imageUrl     String?
-  thumbnailUrl String?
-
-  // navigation
-  actionType   String? // OPEN_PAGE, OPEN_URL, NONE
-  actionTarget String?
-  actionData   Json?
-
-  source    AnnouncmentSource @default(ADMIN)
-  createdBy Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  isDeleted Boolean  @default(false)
-
-  user   endUsers?  @relation(fields: [userId], references: [id])
-  course BigCourse? @relation(fields: [courseId], references: [id])
-  mentor mentor?    @relation(fields: [mentorId], references: [id])
-
-  reads AnnouncementRead[]
-
-  @@index([status])
-  @@index([scheduledAt])
-  @@index([audience, scope])
-}
-
-model AnnouncementRead {
-  id String @id @default(cuid())
-
-  announcementId String
-  userId         Int?
-  mentorId       Int?
-
-  readAt DateTime @default(now())
-
-  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-
-  user   endUsers? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mentor mentor?   @relation(fields: [mentorId], references: [id], onDelete: Cascade)
-
-  @@unique([announcementId, userId])
-  @@unique([announcementId, mentorId])
-  @@index([userId])
-  @@index([mentorId])
-}
-
-//ban system
-model BanRecord {
-  id                Int       @id @default(autoincrement())
-  studentId         Int
-  bannedByMentorId  Int?
-  bannedByAdminId   Int?
-  unbannedByAdminId Int?
-  reason            String
-  bannedAt          DateTime  @default(now())
-  unbannedAt        DateTime?
-  student           endUsers  @relation("UserBans", fields: [studentId], references: [id])
-  bannedByMentor    mentor?   @relation("BannedByMentor", fields: [bannedByMentorId], references: [id])
-  bannedByAdmin     admin?    @relation("BannedByAdmin", fields: [bannedByAdminId], references: [id])
-  unbannedByAdmin   admin?    @relation("UnbannedByAdmin", fields: [unbannedByAdminId], references: [id])
+enum MaterialSource {
+  NEW
+  LEGACY
 }

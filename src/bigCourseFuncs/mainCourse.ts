@@ -3,6 +3,7 @@ import { prisma, redis } from "../misc"
 import path from "path"
 import fs from "fs"
 import { getCache, setCache, invalidateCache } from '../utils/cacheUtils';
+import { getUserSubjectFilter } from "../utils/subscriptionUtils";
 
 export async function GetBigCourses(req: Request, res: Response) {
     const { isLongTerm } = req.body
@@ -130,7 +131,7 @@ export async function GetBigCourseNewDetails(req: Request, res: Response) {
             return res.status(404).json({ success: false, error: "Course not found" });
         }
 
-        const [mentors, subjects] = await Promise.all([
+        const [mentors, subjects, bundles] = await Promise.all([
             course.mentorList.length
                 ? prisma.mentor.findMany({
                     where: { id: { in: course.mentorList } },
@@ -144,6 +145,10 @@ export async function GetBigCourseNewDetails(req: Request, res: Response) {
                     select: { id: true, name: true },
                 })
                 : Promise.resolve([]),
+
+            prisma.bigCourseBundle.findMany({
+                where: { bigCourseId: id, isActive: true }
+            })
         ]);
 
         const response = {
@@ -155,6 +160,7 @@ export async function GetBigCourseNewDetails(req: Request, res: Response) {
             partialPrice: course.partialPrice,
             mentors: mentors,
             subjects: subjects,
+            bundles: bundles,
         };
 
         await setCache(cacheKey, response, 43200); // 12 hours
@@ -179,7 +185,9 @@ export async function GetBigCoursesLesson(req: Request, res: Response) {
     const LIMIT = 500;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `bigCourses:lessons:${id}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:lessons:${id}:page:${page}:filter:${filterKey}`;
 
     try {
         const cachedLessons = await getCache(cacheKey);
@@ -196,6 +204,7 @@ export async function GetBigCoursesLesson(req: Request, res: Response) {
             prisma.session.findMany({
                 where: {
                     bigCourseId: id,
+                    ...subjectFilter,
                 },
                 select: {
                     id: true,
@@ -225,6 +234,7 @@ export async function GetBigCoursesLesson(req: Request, res: Response) {
             prisma.session.count({
                 where: {
                     bigCourseId: id,
+                    ...subjectFilter,
                 },
             }),
         ]);
@@ -276,7 +286,9 @@ export async function GetUpcomingSessions(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `bigCourses:upcomingSessions:${id}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:upcomingSessions:${id}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -300,6 +312,7 @@ export async function GetUpcomingSessions(req: Request, res: Response) {
                     startTime: {
                         gte: startOfToday,
                     },
+                    ...subjectFilter,
                 },
                 select: {
                     id: true,
@@ -332,6 +345,7 @@ export async function GetUpcomingSessions(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: false,
+                    ...subjectFilter,
                 },
             }),
         ]);
@@ -371,7 +385,9 @@ export async function GetTodaySessions(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `bigCourses:todaySessions:${id}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:todaySessions:${id}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -395,6 +411,7 @@ export async function GetTodaySessions(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: false,
+                    ...subjectFilter,
                     OR: [
                         {
                             startTime: {
@@ -438,6 +455,7 @@ export async function GetTodaySessions(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: false,
+                    ...subjectFilter,
                     OR: [
                         {
                             startTime: {
@@ -457,6 +475,7 @@ export async function GetTodaySessions(req: Request, res: Response) {
                     bigCourseId: id,
                     isDone: false,
                     isGoingOn: true,
+                    ...subjectFilter,
                 },
                 select: {
                     id: true,
@@ -501,7 +520,9 @@ export async function GetCompletedSessions(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `bigCourses:completedSessions:${id}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:completedSessions:${id}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -519,6 +540,7 @@ export async function GetCompletedSessions(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: true,
+                    ...subjectFilter,
                 },
                 select: {
                     id: true,
@@ -556,6 +578,7 @@ export async function GetCompletedSessions(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: true,
+                    ...subjectFilter,
                 },
             }),
         ]);
@@ -595,7 +618,9 @@ export async function GetSessionRecordings(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `bigCourses:recordings:${id}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:recordings:${id}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -613,6 +638,7 @@ export async function GetSessionRecordings(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: true,
+                    ...subjectFilter,
                     OR: [
                         { recordingUrl: { not: null } },
                         { screenRecordingUrl: { not: null } },
@@ -648,6 +674,7 @@ export async function GetSessionRecordings(req: Request, res: Response) {
                 where: {
                     bigCourseId: id,
                     isDone: true,
+                    ...subjectFilter,
                     OR: [
                         { recordingUrl: { not: null } },
                         { screenRecordingUrl: { not: null } },
@@ -701,7 +728,9 @@ export async function SearchSessionRecordings(req: Request, res: Response) {
 
     const normalizedQuery = query.trim().toLowerCase();
 
-    const cacheKey = `bigCourses:recordings:search:${id}:${normalizedQuery}:${subjectId || "all"}:${fromDate || "na"}:${toDate || "na"}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user, req.role, id);
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `bigCourses:recordings:search:${id}:${normalizedQuery}:${subjectId || "all"}:${fromDate || "na"}:${toDate || "na"}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -717,6 +746,7 @@ export async function SearchSessionRecordings(req: Request, res: Response) {
         const where: any = {
             bigCourseId: id,
             isDone: true,
+            ...subjectFilter,
             OR: [
                 { recordingUrl: { not: null } },
                 { screenRecordingUrl: { not: null } },
@@ -1039,9 +1069,9 @@ export async function GetCompletedSessionsAdmin(req: Request, res: Response) {
     const {
         id,
         page = 1,
-        startDate,   
-        endDate,     
-        search = ""  
+        startDate,
+        endDate,
+        search = ""
     } = req.body;
 
     if (!id) {

@@ -2,6 +2,7 @@
 import { prisma } from './misc'
 import { Request, Response } from 'express'
 import { getCache, setCache, invalidateCache } from './utils/cacheUtils';
+import { getUserSubjectFilter } from './utils/subscriptionUtils';
 
 
 export async function InsertSessionTests(req: Request, res: Response) {
@@ -190,7 +191,9 @@ export async function GetSessionTests(req: Request, res: Response) {
     const LIMIT = 20;
     const offset = (Number(page) - 1) * LIMIT;
 
-    const cacheKey = `course:sessionTests:${courseId}:user:${userId}:page:${page}`;
+    const subjectFilter = await getUserSubjectFilter(req.user || userId, req.role || 'user', Number(courseId));
+    const filterKey = JSON.stringify(subjectFilter);
+    const cacheKey = `course:sessionTests:${courseId}:user:${userId}:page:${page}:filter:${filterKey}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -209,6 +212,7 @@ export async function GetSessionTests(req: Request, res: Response) {
                 where: {
                     createdFor: {
                         bigCourseId: courseId,
+                        ...subjectFilter,
                     },
                 },
                 select: {
@@ -250,6 +254,7 @@ export async function GetSessionTests(req: Request, res: Response) {
                 where: {
                     createdFor: {
                         bigCourseId: courseId,
+                        ...subjectFilter,
                     },
                 },
             }),
